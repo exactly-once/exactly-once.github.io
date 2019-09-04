@@ -17,9 +17,9 @@
       <pubDate>Wed, 04 Sep 2019 00:00:00 +0000</pubDate>
       
       <guid>https://exactly-once.github.io/posts/consistent-messaging/</guid>
-      <description>Modern messaging infrastructures offer delivery guarantees that make it non-trivial to build distributed systems. Robust solutions require a good understanding of what can and can&amp;rsquo;t happen in a system and how that affects business level behavior.
-This post walks through scenarios that look at the main challenges from the system consistency perspective and sketches possible solutions.
-A system We will assume that systems in focus consist of endpoints, each owning a distinct piece of state.</description>
+      <description>Modern messaging infrastructures offer delivery guarantees that make it non-trivial to build distributed systems. Robust solutions require a good understanding of what can and can&amp;rsquo;t happen and how that affects business level behavior.
+This post looks at the main challenges from the system consistency perspective and sketches possible solutions.
+A system We will assume that systems in focus consist of endpoints, each owning a distinct piece of state. Every endpoint processes input messages, modifying internal state and producing output messages.</description>
     </item>
     
   </channel>
