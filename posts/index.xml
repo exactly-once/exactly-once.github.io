@@ -2,21 +2,21 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Posts on Exactly Once</title>
-    <link>http://example.org/posts/</link>
+    <link>https://exactly-once.github.io/posts/</link>
     <description>Recent content in Posts on Exactly Once</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
     <lastBuildDate>Wed, 04 Sep 2019 00:00:00 +0000</lastBuildDate>
     
-	<atom:link href="http://example.org/posts/index.xml" rel="self" type="application/rss+xml" />
+	<atom:link href="https://exactly-once.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
       <title>Consistent messaging</title>
-      <link>http://example.org/posts/consistent-messaging/</link>
+      <link>https://exactly-once.github.io/posts/consistent-messaging/</link>
       <pubDate>Wed, 04 Sep 2019 00:00:00 +0000</pubDate>
       
-      <guid>http://example.org/posts/consistent-messaging/</guid>
+      <guid>https://exactly-once.github.io/posts/consistent-messaging/</guid>
       <description>Modern messaging infrastructures offer delivery guarantees that make it non-trivial to build distributed systems. Robust solutions require a good understanding of what can and can&amp;rsquo;t happen in a system and how that affects business level behavior.
 This post walks through scenarios that look at the main challenges from the system consistency perspective and sketches possible solutions.
 A system We will assume that systems in focus consist of endpoints, each owning a distinct piece of state.</description>
@@ -24,20 +24,20 @@ A system We will assume that systems in focus consist of endpoints, each owning 
     
     <item>
       <title>Message delivery patterns in asynchronous systems</title>
-      <link>http://example.org/posts/distributed-asynchronous/</link>
+      <link>https://exactly-once.github.io/posts/distributed-asynchronous/</link>
       <pubDate>Wed, 04 Sep 2019 00:00:00 +0000</pubDate>
       
-      <guid>http://example.org/posts/distributed-asynchronous/</guid>
+      <guid>https://exactly-once.github.io/posts/distributed-asynchronous/</guid>
       <description>First of all, we should ask ourselves a question: why bother with distributed asynchronous systems? Wouldn&amp;rsquo;t it be better to just build synchronous non-distributed ones? It certainly would be easier.
 Why distributed A system is distributed if it consists of multiple components and these components are running inside different processes. The fact that these components are part of a single system means they need to communicate to realise functions of that systems.</description>
     </item>
     
     <item>
       <title>Sync-async boundary</title>
-      <link>http://example.org/posts/sync-async-boundary/</link>
+      <link>https://exactly-once.github.io/posts/sync-async-boundary/</link>
       <pubDate>Wed, 04 Sep 2019 00:00:00 +0000</pubDate>
       
-      <guid>http://example.org/posts/sync-async-boundary/</guid>
+      <guid>https://exactly-once.github.io/posts/sync-async-boundary/</guid>
       <description>If my experience in the IT industry has taught me anything it would be that drawing boundaries is the most important part of the design process. Boundaries are essential for understanding and communicating the design. The sync-async is an example of a boundary that is useful when designing distributed systems.
 Purely sync The most popular medium for building synchronous systems is HTTP. In the outermost layer, the user&amp;rsquo;s action is transformed into an HTTP request by the code running in the browser and submitted to one of the backend components for processing.</description>
     </item>
