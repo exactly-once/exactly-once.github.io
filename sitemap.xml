@@ -14,19 +14,9 @@
   </url>
   
   <url>
-    <loc>https://exactly-once.github.io/posts/distributed-asynchronous/</loc>
-    <lastmod>2019-09-04T00:00:00+00:00</lastmod>
-  </url>
-  
-  <url>
     <loc>https://exactly-once.github.io/posts/</loc>
     <lastmod>2019-09-04T00:00:00+00:00</lastmod>
     <priority>0</priority>
-  </url>
-  
-  <url>
-    <loc>https://exactly-once.github.io/posts/sync-async-boundary/</loc>
-    <lastmod>2019-09-04T00:00:00+00:00</lastmod>
   </url>
   
   <url>

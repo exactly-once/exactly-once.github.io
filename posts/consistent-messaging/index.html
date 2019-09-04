@@ -93,14 +93,14 @@
 
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-csharp" data-lang="csharp"><span style="color:#66d9ef">void</span> Handle(FireAt message)
 {
- <span style="color:#66d9ef">if</span>(<span style="color:#66d9ef">this</span>.TargetPosition == message.Position) 
- {
- Publish(<span style="color:#66d9ef">new</span> Hit());
- }
- <span style="color:#66d9ef">else</span> 
- {
- Publish(<span style="color:#66d9ef">new</span> Missed());
- }
+    <span style="color:#66d9ef">if</span>(<span style="color:#66d9ef">this</span>.TargetPosition == message.Position) 
+    {
+        Publish(<span style="color:#66d9ef">new</span> Hit());
+    }
+    <span style="color:#66d9ef">else</span> 
+    {
+        Publish(<span style="color:#66d9ef">new</span> Missed());
+    }
 }
 </code></pre></div>
 
@@ -110,7 +110,7 @@
 
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-csharp" data-lang="csharp"><span style="color:#66d9ef">void</span> Handle(Hit message)
 {
- <span style="color:#66d9ef">this</span>.NumberOfHits++;
+    <span style="color:#66d9ef">this</span>.NumberOfHits++;
 }
 </code></pre></div>
 
@@ -122,13 +122,13 @@
 
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-csharp" data-lang="csharp"><span style="color:#66d9ef">void</span> Handle(Hit message)
 {
- <span style="color:#66d9ef">if</span>(<span style="color:#66d9ef">this</span>.Hits.Contains(message.AttemptId))
- {
- <span style="color:#66d9ef">return</span>;
- }
- <span style="color:#66d9ef">this</span>.Hits.Add(message.AttemptId);
- 
- <span style="color:#66d9ef">this</span>.NumberOfHits++;
+    <span style="color:#66d9ef">if</span>(<span style="color:#66d9ef">this</span>.Hits.Contains(message.AttemptId))
+    {
+        <span style="color:#66d9ef">return</span>;
+    }
+    <span style="color:#66d9ef">this</span>.Hits.Add(message.AttemptId);
+    
+    <span style="color:#66d9ef">this</span>.NumberOfHits++;
 }
 </code></pre></div>
 
@@ -140,19 +140,19 @@
 
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-csharp" data-lang="csharp"><span style="color:#66d9ef">void</span> Handle(MoveTarget message)
 {
- <span style="color:#66d9ef">this</span>.TargetPosition = message.Position;
+    <span style="color:#66d9ef">this</span>.TargetPosition = message.Position;
 }
 
 <span style="color:#66d9ef">void</span> Handle(FireAt message)
 {
- <span style="color:#66d9ef">if</span>(<span style="color:#66d9ef">this</span>.TargetPosition == message.Position) 
- {
- Publish(<span style="color:#66d9ef">new</span> Hit { AttemptId = message.AttemptId });
- }
- <span style="color:#66d9ef">else</span>
- {
- Publish(<span style="color:#66d9ef">new</span> Missed { AttemptId = message.AttemptId });
- } 
+    <span style="color:#66d9ef">if</span>(<span style="color:#66d9ef">this</span>.TargetPosition == message.Position) 
+    {
+        Publish(<span style="color:#66d9ef">new</span> Hit { AttemptId = message.AttemptId });
+    }
+    <span style="color:#66d9ef">else</span>
+    {
+        Publish(<span style="color:#66d9ef">new</span> Missed { AttemptId = message.AttemptId });
+    } 
 }
 </code></pre></div>
 
