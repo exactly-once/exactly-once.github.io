@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us" lang="en-us">
+<head>
+  <link href="//gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="generator" content="Hugo 0.55.6" />
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Message delivery patterns in asynchronous systems &middot; Exactly Once</title>
+
+  
+  <link type="text/css" rel="stylesheet" href="http://example.org/css/print.css" media="print">
+  <link type="text/css" rel="stylesheet" href="http://example.org/css/poole.css">
+  <link type="text/css" rel="stylesheet" href="http://example.org/css/syntax.css">
+  <link type="text/css" rel="stylesheet" href="http://example.org/css/hyde.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Abril+Fatface|PT+Sans:400,400i,700">
+
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.png">
+
+  
+  
+</head>
+
+  <body class=" ">
+  <aside class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <a href="http://example.org/"><h1>Exactly Once</h1></a>
+      <p class="lead">
+       On distributed systems by <a href="http://twitter.com/SzymonPobiega">@SzymonPobiega</a> and <a href="http://twitter.com/Masternak">@Masternak</a> 
+      </p>
+    </div>
+
+    <nav>
+      <ul class="sidebar-nav">
+        <li><a href="http://example.org/">Home</a> </li>
+        
+      </ul>
+    </nav>
+
+    <p>&copy; 2019. All rights reserved. </p>
+  </div>
+</aside>
+
+    <main class="content container">
+    <div class="post">
+  <h1>Message delivery patterns in asynchronous systems</h1>
+  <time datetime=2019-09-04T00:00:00Z class="post-date">Wed, Sep 4, 2019</time>
+  
+
+<p>First of all, we should ask ourselves a question: why bother with distributed asynchronous systems? Wouldn&rsquo;t it be better to just build synchronous non-distributed ones? It certainly would be easier.</p>
+
+<h3 id="why-distributed">Why distributed</h3>
+
+<p>A system is <em>distributed</em> if it consists of multiple components and these components are running inside different processes. The fact that these components are part of a single system means they need to communicate to realise functions of that systems. If there was no requirement for communication then we could call them separate non-distributed systems. In a distributed system components can fails independently which makes reasoning about the overall state of the system more difficult. A non-distributed system is either up or down. A distributed one can be partly up and its components need to cope with it.</p>
+
+<p>Communication across process boundaries is much more challenging than within a single process. A call to another service needs to be converted into a message that can be transmitted over the wire. On the other side a similar mechanism needs to unpack the message and convert it back into a function call. There are many things that can go wrong in the meantime, including but not limited to network issues and process downtime.</p>
+
+<p>So why do we distribute components of our systems? The main reasons are following.</p>
+
+<h4 id="maintenance">Maintenance</h4>
+
+<p>Maintenance in software is a process by which an existing software system is extended with new functionality after being deployed to the production environment. Traditionally there were two separate and well-defined stages of software system: building and maintaining. The assumption used to be that the majority of important features of the software system are delivered in the building phase in which that system is not yet operational. At the end of the building phase the system is deployed to a production environment and the process transitions to the maintenance stage in which only minor features and bug-fixes are delivered periodically until the system can be finally decommissioned.</p>
+
+<p>Today the transition between the phases is much more blurry and usually happens much earlier, even at the very beginning of the process. That means that major features are continued to be delivered while the system is operational. This change in the process influences how software systems are designed. Out of the necessity to deliver major features to a production system the idea of isolation was born. If we split the system into multiple processes it would be possible to stop, deploy and restart part of the system independently. Changes could be deployed and verified in production in a gradual fashion without the need of a Big Bang deployment of a whole system.</p>
+
+<h4 id="failure-tolerance">Failure tolerance</h4>
+
+<p>When we think about failure in software system we usually picture machines being toasted. As a result the process that was running our components dies and all users who were connected to that process need to be migrated to a different one. This process is called fail-over and is well-known and well-understood by our industry. Non-distributed systems are generally good in handling this failure mode. The long time best-practice was to keep the middle trier of a system stateless and keep all state in the database. If you followed that practice and one of your processes died, you could easily switch users to other processes that run exactly the same code/binaries.</p>
+
+<p>Unfortunately a machine crash is not the only failure mode. More dangerous failures are results of defects in the code. These defects might cause failures in a deterministic manner or be triggered by some external condition i.e. February 29th. Their evil-doing potential comes from the fact that running multiple copies of the process does not help as all the copies are going to be affected at the same time.</p>
+
+<p>Investigation of such failures reveals that they are often caused by a single malfunctioning component that, e.g. starts to consume all available memory, eventually causing whole process to crash. This leads to the idea that physically isolating components can prevent a failure in one to bring the whole system down. The system might suffer from reduced functionality for a while but at least it will be running.</p>
+
+<h4 id="scalability">Scalability</h4>
+
+<p>For a long time scalability in software was dealt with in the same way as the failure tolerance i.e. by running multiple copies of the system. When the load increases more instances can be provisioned on demand. Unfortunately it only works well for the HTTP traffic. You can&rsquo;t scale the nightly batch process simply by running more instances of the process. By allowing components to run in different processes you can optimize scaling for the specific behavior of a given component.</p>
+
+<h4 id="data-store">Data store</h4>
+
+<p>So far we talked about the middle tier which is focused on computing. Let&rsquo;s now take a look at the data tier. Should we distribute the data between multiple stores? Let&rsquo;s assume we have already decided to distribute our middle tier components. What would prevent us from having a separate data store for each of these components?</p>
+
+<h4 id="database-integration">Database integration</h4>
+
+<p>The answer is the dreadful database integration. As mentioned above, communication across the process boundary is difficult and prone to failures. Atomic transactions (with some notable but irrelevant exception) cannot span process boundaries. This means that a if component A wants to modify data X and call component B (in a different process) to modify data Y, they can&rsquo;t ensure both changes are done atomically. Database integration offers a simple solution to this problem. Just let component A modify both X and Y and component B poll database for changes in Y. This way Y will get reliably notified when Y changes.</p>
+
+<p>Unfortunately database integration has a dark side to it. When each and every component can modify any piece of the shared data store, none of these components can evolve independently of others. Very quickly the data store schema fossilizes. Nobody can remove a single column, ever. This is why we, as in industry, have learned to avoid database integration at all cost.</p>
+
+<p>This leaves us with the only viable option to use separate data stores for each component. Depending on the requirements, these data stores might all be of the same type (e.g. SQL) or there might be specialized ones e.g. graph databases or time series databases.</p>
+
+<h3 id="why-asynchronous">Why asynchronous</h3>
+
+<p>So far we&rsquo;ve dealt with the <em>why distributed</em> question. Let&rsquo;s now focus on the asynchronous part. Why asynchronous? Recall the scenario we discussed a bit earlier when component A wanted to modify data X and call component B to modify data Y. We&rsquo;ve seen that due to lack of shared transaction context we can&rsquo;t execute this scenario atomically i.e. ensuring that either both X and Y are modified of none is. So can we afford to give up atomicity? Many people will tell you that this is precisely what you need to do in the cloud. I call it BS. Cloud or not, we need to build systems that ensure consistent data modifications.</p>
+
+<p>Can we then use some magic to create the shared transaction context between A and B? As it turns out we can. This technology is called distributed transactions and is quite old. So why not just use it and avoid asynchrony? There are two problems with this technology. First, it is not widely available. The lock-heavy nature of Two-Phase-Commit protocol used in distributed transactions is not well suited for shared cloud infrastructure which means that cloud-native data stores won&rsquo;t play ball with distributed transactions.</p>
+
+<p>The second problem is also rooted in the lock-heavy nature of the distributed transactions. In order to guarantee that all involved parties can commit the transaction, locks need to be held by all participants for the whole duration of the transaction. This greatly limits the autonomy of components as one faulty component that is unable to commit its transactions can bring the whole system to a halt.</p>
+
+<p>So what is the alternative? We can&rsquo;t really guarantee that X and Y are modified atomically but we can do guarantee something that is almost as good from business point of view. We can ensure that if X is modified then Y will be eventually modified to. We can do this by introducing durable messaging infrastructure between A and B. With that infrastructure A can send a message to B and the messaging infrastructure will guarantee that the message will be eventually delivered. Let&rsquo;s assume that message <code>a</code> arrives at <code>Q_A</code>. The message is picked up by A and processed. As a result, message <code>b</code> is put into queue <code>Q_B</code> and X is modified. Later, B picks up a message from <code>Q_B</code> and, as a result, modifies Y. Any failure while processing a message causes that message to be returned to its queue (where it is durably stored). The outlined provides the very guarantee we were seeking, namely that if X is modified then Y will be eventually modified as well.</p>
+
+</div>
+
+
+    </main>
+
+    
+  </body>
+</html>

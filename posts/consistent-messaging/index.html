@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us" lang="en-us">
+<head>
+  <link href="//gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="generator" content="Hugo 0.55.6" />
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Consistent messaging &middot; Exactly Once</title>
+
+  
+  <link type="text/css" rel="stylesheet" href="http://example.org/css/print.css" media="print">
+  <link type="text/css" rel="stylesheet" href="http://example.org/css/poole.css">
+  <link type="text/css" rel="stylesheet" href="http://example.org/css/syntax.css">
+  <link type="text/css" rel="stylesheet" href="http://example.org/css/hyde.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Abril+Fatface|PT+Sans:400,400i,700">
+
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.png">
+
+  
+  
+</head>
+
+  <body class=" ">
+  <aside class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <a href="http://example.org/"><h1>Exactly Once</h1></a>
+      <p class="lead">
+       On distributed systems by <a href="http://twitter.com/SzymonPobiega">@SzymonPobiega</a> and <a href="http://twitter.com/Masternak">@Masternak</a> 
+      </p>
+    </div>
+
+    <nav>
+      <ul class="sidebar-nav">
+        <li><a href="http://example.org/">Home</a> </li>
+        
+      </ul>
+    </nav>
+
+    <p>&copy; 2019. All rights reserved. </p>
+  </div>
+</aside>
+
+    <main class="content container">
+    <div class="post">
+  <h1>Consistent messaging</h1>
+  <time datetime=2019-09-04T00:00:00Z class="post-date">Wed, Sep 4, 2019</time>
+  
+
+<p>Modern messaging infrastructures offer delivery guarantees that make it non-trivial to build distributed systems. Robust solutions require a good understanding of what can and can&rsquo;t happen in a system and how that affects business level behavior.</p>
+
+<p>This post walks through scenarios that look at the main challenges from the system consistency perspective and sketches possible solutions.</p>
+
+<h2 id="a-system">A system</h2>
+
+<p>We will assume that systems in focus consist of endpoints, each owning a distinct piece of state. Every endpoint processes input messages, modifying its internal state and producing output messages. All endpoints communicate using persistent messaging with at-least-once delivery guarantee. Finally, we will assume that no messages can be lost.</p>
+
+<p>This covers a pretty wide range of systems. Most notably service-based architectures build on top of modern messaging infrastructure - both on-premise and in the cloud <sup class="footnote-ref" id="fnref:1"><a href="#fn:1">1</a></sup>.</p>
+
+<figure>
+    <img src="/docs/an_endpoint.jpg"/> <figcaption>
+            <h4>An endpoint</h4>
+        </figcaption>
+</figure>
+
+
+<p>With at-least-once delivery, any in-flight message gets delivered possibly multiple times. This is a direct consequence of communication protocols used as any message will be re-delivered until it gets acknowledged by the receiver. Duplicates are also created on the producer side as the producer needs to retry sending messages until it gets an acknowledgement from the infrastructure.</p>
+
+<p>Apart from being duplicated, in-flight messages can get re-ordered. There are many reasons for this to happen <sup class="footnote-ref" id="fnref:2"><a href="#fn:2">2</a></sup> one of the most obvious being message re-delivery mechanism. If delivery fails, a message is available for reprocessing only after some back-off period. Any other in-flight message can be processed during that time causing the respective order of those messages to change.</p>
+
+<p>When combined, duplication and re-ordering can produce, at the receiver side, any sequence of messages. The only guarantee is that the resulting sequence contains at least one copy of each message sent.</p>
+
+<figure>
+    <img src="/docs/in_flight-to-processing_order.jpg"/> <figcaption>
+            <h4>Sample duplication and re-ordering scenarios</h4>
+        </figcaption>
+</figure>
+
+
+<h2 id="the-system">The system</h2>
+
+<p>Let&rsquo;s look at a system that models a moving target shooting range to see the practical consequences of this behavior.</p>
+
+<p>We will start with a single <code>ShootingRange</code> endpoint which stores shooting target&rsquo;s location <code>{ int: TargetPosition }</code> and processes <code>FireAt : { int: Position }</code> messages.</p>
+
+<p>Whenever <code>FireAt</code> message gets processed the endpoint produces either <code>Hit</code> or <code>Missed</code> event to indicate the result:</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-csharp" data-lang="csharp"><span style="color:#66d9ef">void</span> Handle(FireAt message)
+{
+ <span style="color:#66d9ef">if</span>(<span style="color:#66d9ef">this</span>.TargetPosition == message.Position) 
+ {
+ Publish(<span style="color:#66d9ef">new</span> Hit());
+ }
+ <span style="color:#66d9ef">else</span> 
+ {
+ Publish(<span style="color:#66d9ef">new</span> Missed());
+ }
+}
+</code></pre></div>
+
+<h3 id="duplicates">Duplicates</h3>
+
+<p>Let&rsquo;s extend the system with a second <code>LeaderBoard</code> endpoint that&rsquo;s responsible for storing the number of target hits that the player made. The endpoint processes <code>Hit</code> messages generated by the <code>ShootingRange</code>:</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-csharp" data-lang="csharp"><span style="color:#66d9ef">void</span> Handle(Hit message)
+{
+ <span style="color:#66d9ef">this</span>.NumberOfHits++;
+}
+</code></pre></div>
+
+<p>It&rsquo;s easy to notice that this will break when <code>Hit</code> messages get duplicated. When <code>LeaderBoard</code> receives a <code>Hit</code> message it has no way to tell if there&rsquo;s been a new hit or if it&rsquo;s just duplicate of some other <code>Hit</code> message already processed.</p>
+
+<p>The only way to cope with duplicates is by making sure we can test message equality at the business level. This can be achieved by modeling messages as immutable facts or intents with <strong>unique identity</strong> rather than values <sup class="footnote-ref" id="fnref:3"><a href="#fn:3">3</a></sup>.</p>
+
+<p>If we extend <code>FireAt</code> message with <code>AttemptId</code> property (unique for each attempt the player makes) we can later use it as an identifier for the <code>Hit</code> event. With that in place <code>LeaderBoard</code> logic becomes:</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-csharp" data-lang="csharp"><span style="color:#66d9ef">void</span> Handle(Hit message)
+{
+ <span style="color:#66d9ef">if</span>(<span style="color:#66d9ef">this</span>.Hits.Contains(message.AttemptId))
+ {
+ <span style="color:#66d9ef">return</span>;
+ }
+ <span style="color:#66d9ef">this</span>.Hits.Add(message.AttemptId);
+ 
+ <span style="color:#66d9ef">this</span>.NumberOfHits++;
+}
+</code></pre></div>
+
+<p>In short, business-level identifiers are a must to cope with duplicates.</p>
+
+<h3 id="re-ordering">Re-ordering</h3>
+
+<p>Let&rsquo;s add another moving piece to our system - <code>GameScenario</code> endpoint that changes current position of the moving target by sending <code>MoveTarget</code> messages to the <code>ShootingRange</code> endpoint. <code>ShootingRange</code> logic now becomes:</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-csharp" data-lang="csharp"><span style="color:#66d9ef">void</span> Handle(MoveTarget message)
+{
+ <span style="color:#66d9ef">this</span>.TargetPosition = message.Position;
+}
+
+<span style="color:#66d9ef">void</span> Handle(FireAt message)
+{
+ <span style="color:#66d9ef">if</span>(<span style="color:#66d9ef">this</span>.TargetPosition == message.Position) 
+ {
+ Publish(<span style="color:#66d9ef">new</span> Hit { AttemptId = message.AttemptId });
+ }
+ <span style="color:#66d9ef">else</span>
+ {
+ Publish(<span style="color:#66d9ef">new</span> Missed { AttemptId = message.AttemptId });
+ } 
+}
+</code></pre></div>
+
+<p>Let&rsquo;s analyze one possible processing scenario that incudes <code>FireAt</code> and <code>MoveTarget</code> messages. We begin with <code>TargetPosition</code> equal to <code>42</code>, the player sends <code>FireAt : { Position: 42 }</code> and <code>GameScenario</code> sends <code>MoveTarget : {Position: 1}</code>. Due to duplication and re-ordering <code>FireAt</code> gets processed first followed by <code>MoveTarget</code> and finally <code>FireAt</code> duplicate.</p>
+
+<figure>
+    <img src="/docs/seq-consistency-corruption.png"/> <figcaption>
+            <h4>An &#39;alternative worlds&#39; scenario</h4>
+        </figcaption>
+</figure>
+
+
+<p>This results with <code>ShootingRange</code> publishing two events - <code>Hit</code> and <code>Missed</code>, both for the same <code>FireAt</code> message.</p>
+
+<p><strong>We ended up with two messages representing two contradictory facts about the same attempt</strong>. It&rsquo;s not the case of an unexpected end-state e.g. with an attempt resulting in a miss when we expected a hit. It&rsquo;s far worse than that! We ended up in a state which indicates that two logically exclusive alternatives occurred. A state which is simply corrupted.</p>
+
+<h2 id="consistency">Consistency</h2>
+
+<p>We know things went bad but what was the root cause? It all boils down to the fact that <code>FireAt</code> duplicate was processed using a different version of <code>ShootingRage</code> state than the first time. Initially, <code>TargetPosition</code> was <code>42</code> and changed to <code>1</code> before the duplicate arrived. That, in turn, resulted in &ldquo;alternative-worlds&rdquo; scenario where the attempt both missed and hit the target.</p>
+
+<p>Duplicates and re-ordering are the reality we operate in and can&rsquo;t change. What we can do though, is to ensure that once a message gets processed all duplicates result in consistent observable side-effects i.e. messages produced. In our example, we need a guarantee that processing <code>FireAt</code> duplicate results either in no messages published or in an exact copy of the first <code>Hit</code> event. Producing duplicates is fine as those have to be handled either way.</p>
+
+<p>More generally, we want an endpoint to produce observable side-effects <strong>equivalent to some execution in which each logical message gets processed exactly-once</strong>. Equivalent meaning that it&rsquo;s indistinguishable from the perspective of any other endpoint.</p>
+
+<h2 id="exactly-once">Exactly-once</h2>
+
+<p>There are many possible implementations of exactly-once behavior. Every with its own set of constraints and trade-offs. As usual, which approach is the best fit depends on the context and concrete requirements.</p>
+
+<h3 id="business-logic-level">Business logic level</h3>
+
+<p>It&rsquo;s possible to make the business logic responsible for producing consistent behavior. In such a case, the business rules have to be extended or tweaked to make sure duplicates and re-ordering are properly handled.</p>
+
+<h3 id="state-based">State-based</h3>
+
+<p>Any operation performed on the same input (state) results in the same output (messages), no matter how many times executed. If for any duplicate we could get a version of the state as it was when the first processing happened than we could re-run the handling logic and be sure to get consistent output.</p>
+
+<h3 id="side-effects-based">Side-effects based</h3>
+
+<p>Alternatively, we could capture the side-effects instead of the state used to produce them. What gets captured in such an approach are not the historical versions of the state but rather messages that got produced when processing a given message.</p>
+
+<p>With that in place, whenever a message arrives we can query the side-effects store to see if that&rsquo;s a duplicate. If so, the business logic invocation can be skipped and the stored messages published right away.</p>
+
+<h2 id="summary">Summary</h2>
+
+<p>There are non-trivial challenges that designers need to overcome when building message-based systems. In this post, we&rsquo;ve seen what kind of consistency problems may arise when message duplication and re-ordering are not handled with care. Finally, we sketched some of the possible ways to ensure consistent business behavior.</p>
+
+<p>That being said we only scratched the surface. There are many architectural and technical aspects that we did not consider tough: What can be done generically, independent of the business logic? Do we require any guarantees from the storage used by the endpoint? Exactly, how much extra data do we need to store?</p>
+
+<p>Those are all interesting topics that we will be covered in the follow-up posts.</p>
+<div class="footnotes">
+
+<hr />
+
+<ol>
+<li id="fn:1">RabbitMQ, ASQ, Azure Service Bus, SQS are just a few examples
+ <a class="footnote-return" href="#fnref:1"><sup>[return]</sup></a></li>
+<li id="fn:2">Great description of ordered delivery challenges can be found in <a href="https://sookocheff.com/post/messaging/dissecting-sqs-fifo-queues/">Kevin&rsquo;s</a> post. The post focuses on SQS but drives to conclusions applicable to other messaging solutions out there.
+ <a class="footnote-return" href="#fnref:2"><sup>[return]</sup></a></li>
+<li id="fn:3">Similarly to Value Objects and Entities in Domain-Driven Design
+ <a class="footnote-return" href="#fnref:3"><sup>[return]</sup></a></li>
+</ol>
+</div>
+
+</div>
+
+
+    </main>
+
+    
+  </body>
+</html>

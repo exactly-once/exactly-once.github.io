@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us" lang="en-us">
+<head>
+  <link href="//gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="generator" content="Hugo 0.55.6" />
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Exactly Once</title>
+
+  
+  <link type="text/css" rel="stylesheet" href="http://example.org/css/print.css" media="print">
+  <link type="text/css" rel="stylesheet" href="http://example.org/css/poole.css">
+  <link type="text/css" rel="stylesheet" href="http://example.org/css/syntax.css">
+  <link type="text/css" rel="stylesheet" href="http://example.org/css/hyde.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Abril+Fatface|PT+Sans:400,400i,700">
+
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.png">
+
+  
+  <link href="http://example.org/index.xml" rel="alternate" type="application/rss+xml" title="Exactly Once" />
+  
+</head>
+
+  <body class=" ">
+  <aside class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <a href="http://example.org/"><h1>Exactly Once</h1></a>
+      <p class="lead">
+       On distributed systems by <a href="http://twitter.com/SzymonPobiega">@SzymonPobiega</a> and <a href="http://twitter.com/Masternak">@Masternak</a> 
+      </p>
+    </div>
+
+    <nav>
+      <ul class="sidebar-nav">
+        <li><a href="http://example.org/">Home</a> </li>
+        
+      </ul>
+    </nav>
+
+    <p>&copy; 2019. All rights reserved. </p>
+  </div>
+</aside>
+
+    <main class="content container">
+    <div class="posts">
+<article class="post">
+  <h1 class="post-title">
+    <a href="http://example.org/posts/consistent-messaging/">Consistent messaging</a>
+  </h1>
+  <time datetime="2019-09-04T00:00:00Z" class="post-date">Wed, Sep 4, 2019</time>
+  Modern messaging infrastructures offer delivery guarantees that make it non-trivial to build distributed systems. Robust solutions require a good understanding of what can and can&rsquo;t happen in a system and how that affects business level behavior.
+This post walks through scenarios that look at the main challenges from the system consistency perspective and sketches possible solutions.
+A system We will assume that systems in focus consist of endpoints, each owning a distinct piece of state.
+  
+  <div class="read-more-link">
+    <a href="/posts/consistent-messaging/">Read More…</a>
+  </div>
+  
+</article><article class="post">
+  <h1 class="post-title">
+    <a href="http://example.org/posts/distributed-asynchronous/">Message delivery patterns in asynchronous systems</a>
+  </h1>
+  <time datetime="2019-09-04T00:00:00Z" class="post-date">Wed, Sep 4, 2019</time>
+  First of all, we should ask ourselves a question: why bother with distributed asynchronous systems? Wouldn&rsquo;t it be better to just build synchronous non-distributed ones? It certainly would be easier.
+Why distributed A system is distributed if it consists of multiple components and these components are running inside different processes. The fact that these components are part of a single system means they need to communicate to realise functions of that systems.
+  
+  <div class="read-more-link">
+    <a href="/posts/distributed-asynchronous/">Read More…</a>
+  </div>
+  
+</article><article class="post">
+  <h1 class="post-title">
+    <a href="http://example.org/posts/sync-async-boundary/">Sync-async boundary</a>
+  </h1>
+  <time datetime="2019-09-04T00:00:00Z" class="post-date">Wed, Sep 4, 2019</time>
+  If my experience in the IT industry has taught me anything it would be that drawing boundaries is the most important part of the design process. Boundaries are essential for understanding and communicating the design. The sync-async is an example of a boundary that is useful when designing distributed systems.
+Purely sync The most popular medium for building synchronous systems is HTTP. In the outermost layer, the user&rsquo;s action is transformed into an HTTP request by the code running in the browser and submitted to one of the backend components for processing.
+  
+  <div class="read-more-link">
+    <a href="/posts/sync-async-boundary/">Read More…</a>
+  </div>
+  
+</article>
+</div>
+    </main>
+
+    
+  </body>
+</html>
