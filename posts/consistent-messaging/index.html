@@ -64,7 +64,7 @@
 <p>This covers a pretty wide range of systems. Most notably service-based architectures build on top of modern messaging infrastructure - both on-premise and in the cloud <sup class="footnote-ref" id="fnref:1"><a href="#fn:1">1</a></sup>.</p>
 
 <figure>
-    <img src="/docs/an_endpoint.jpg"/> <figcaption>
+    <img src="/posts/an_endpoint.jpg"/> <figcaption>
             <h4>An endpoint</h4>
         </figcaption>
 </figure>
@@ -77,7 +77,7 @@
 <p>When combined, duplication and re-ordering can produce, at the receiver side, any sequence of messages. The only guarantee is that the resulting sequence contains at least one copy of each message sent.</p>
 
 <figure>
-    <img src="/docs/in_flight-to-processing_order.jpg"/> <figcaption>
+    <img src="/posts/in_flight-to-processing_order.jpg"/> <figcaption>
             <h4>Sample duplication and re-ordering scenarios</h4>
         </figcaption>
 </figure>
@@ -159,7 +159,7 @@
 <p>Let&rsquo;s analyze one possible processing scenario that incudes <code>FireAt</code> and <code>MoveTarget</code> messages. We begin with <code>TargetPosition</code> equal to <code>42</code>, the player sends <code>FireAt : { Position: 42 }</code> and <code>GameScenario</code> sends <code>MoveTarget : {Position: 1}</code>. Due to duplication and re-ordering <code>FireAt</code> gets processed first followed by <code>MoveTarget</code> and finally <code>FireAt</code> duplicate.</p>
 
 <figure>
-    <img src="/docs/seq-consistency-corruption.png"/> <figcaption>
+    <img src="/posts/seq-consistency-corruption.png"/> <figcaption>
             <h4>An &#39;alternative worlds&#39; scenario</h4>
         </figcaption>
 </figure>
