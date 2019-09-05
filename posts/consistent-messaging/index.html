@@ -61,7 +61,7 @@
 
 <p>We will assume that systems in focus consist of endpoints, each owning a distinct piece of state. Every endpoint processes input messages, modifying internal state and producing output messages. All endpoints communicate using persistent messaging with at-least-once delivery guarantee. Finally, we assume no messages can be lost.</p>
 
-<p>This covers a pretty wide range of systems. Most notably service-based architectures build on top of modern messaging infrastructure - both on-premise and in the cloud <sup class="footnote-ref" id="fnref:1"><a href="#fn:1">1</a></sup>.</p>
+<p>This covers a pretty wide range of systems. Most notably service-based architectures build on top of the modern messaging infrastructure - both on-premise and in the cloud <sup class="footnote-ref" id="fnref:1"><a href="#fn:1">1</a></sup>.</p>
 
 <figure>
     <img src="/posts/an_endpoint.jpg"/> <figcaption>
@@ -72,7 +72,7 @@
 
 <p>With at-least-once delivery, any in-flight message gets delivered possibly multiple times. This is a direct consequence of communication protocols used as any message will be re-delivered until acknowledged by the receiver. For the same reasons, duplicates get created by message producers.</p>
 
-<p>Apart from being duplicated, in-flight messages can get re-ordered. There are many reasons for this to happen <sup class="footnote-ref" id="fnref:2"><a href="#fn:2">2</a></sup> one of the most obvious being message re-delivery mechanism. If delivery fails, a message is available for reprocessing only after some back-off period. Any other in-flight message can be processed during that time causing the respective order of those messages to change.</p>
+<p>Apart from being duplicated, in-flight messages can get re-ordered. There are many reasons for this to happen <sup class="footnote-ref" id="fnref:2"><a href="#fn:2">2</a></sup> one of the most obvious being message re-delivery mechanism. If a delivery fails, a message is available for reprocessing only after some back-off period. Any other in-flight message can be processed during that time causing the respective order of those messages to change.</p>
 
 <p>When combined, duplication and re-ordering can result, at the receiver side, in many different processing sequences. The only guarantee is that the resulting sequence contains at least one copy of each message sent.</p>
 
@@ -118,7 +118,7 @@
 
 <p>The only way to cope with duplicates is by making sure we can test message equality at the business level. This can be achieved by modeling messages as immutable facts or intents with <strong>unique identity</strong> rather than values <sup class="footnote-ref" id="fnref:3"><a href="#fn:3">3</a></sup>.</p>
 
-<p>If we extend <code>FireAt</code> message with <code>AttemptId</code> property (unique for each attempt the player makes) we can later use it as an identifier for the <code>Hit</code> event. With that in place <code>LeaderBoard</code> logic becomes:</p>
+<p>If we extend <code>FireAt</code> message with <code>AttemptId</code> property (unique for each attempt the player makes) we can later use it as an identifier for the <code>Hit</code> event. With that in place, <code>LeaderBoard</code> logic becomes:</p>
 
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-csharp" data-lang="csharp"><span style="color:#66d9ef">void</span> Handle(Hit message)
 {
@@ -136,7 +136,7 @@
 
 <h3 id="re-ordering">Re-ordering</h3>
 
-<p>Let&rsquo;s add another moving piece to our system - <code>GameScenario</code> endpoint that changes current position of the moving target by sending <code>MoveTarget</code> messages to the <code>ShootingRange</code> endpoint. <code>ShootingRange</code> logic now becomes:</p>
+<p>Let&rsquo;s add another moving piece to our system - <code>GameScenario</code> endpoint that changes the current position of the moving target by sending <code>MoveTarget</code> messages to the <code>ShootingRange</code> endpoint. <code>ShootingRange</code> logic now becomes:</p>
 
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-csharp" data-lang="csharp"><span style="color:#66d9ef">void</span> Handle(MoveTarget message)
 {
