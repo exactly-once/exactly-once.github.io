@@ -6,15 +6,25 @@
     <description>Recent content in Posts on Exactly Once</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Tue, 24 Sep 2019 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 11 Oct 2019 00:00:00 +0000</lastBuildDate>
     
 	<atom:link href="https://exactly-once.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
+      <title>Consistent state</title>
+      <link>https://exactly-once.github.io/posts/consistent-state/</link>
+      <pubDate>Fri, 11 Oct 2019 00:00:00 +0000</pubDate>
+      
+      <guid>https://exactly-once.github.io/posts/consistent-state/</guid>
+      <description>In the previous post we talked about exactly-once processing looking at the endpoint from the outside. Here we will re-focus on an individual endpoint and see what exactly-once means for an endpoint&amp;rsquo;s state.
+It&amp;rsquo;s not about the execution history Exactly-once spawned some heated debates in the past1 so let&amp;rsquo;s make sure we make it clear what it means in our context - or more importantly what it doesn&amp;rsquo;t. Here we talk about exactly-once processing not delivery, the two being quite different things.</description>
+    </item>
+    
+    <item>
       <title>Sync-async boundary</title>
       <link>https://exactly-once.github.io/posts/sync-async-boundary/</link>
-      <pubDate>Tue, 24 Sep 2019 00:00:00 +0000</pubDate>
+      <pubDate>Thu, 19 Sep 2019 00:00:00 +0000</pubDate>
       
       <guid>https://exactly-once.github.io/posts/sync-async-boundary/</guid>
       <description>If our experience in the IT industry has taught us anything it would be that drawing boundaries is the most important part of the design process. Boundaries are essential for understanding and communicating the design. The sync-async is an example of a boundary that is useful when designing distributed systems.

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us" lang="en-us">
+<head>
+  <link href="//gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="generator" content="Hugo 0.55.6" />
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Consistent state &middot; Exactly Once</title>
+
+  
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/print.css" media="print">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/poole.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/syntax.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/hyde.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Abril+Fatface|PT+Sans:400,400i,700">
+
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.png">
+
+  
+  
+</head>
+
+  <body class=" ">
+  <aside class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <a href="https://exactly-once.github.io/"><h1>Exactly Once</h1></a>
+      <p class="lead">
+       On distributed systems by <a href="http://twitter.com/SzymonPobiega">@SzymonPobiega</a> and <a href="http://twitter.com/Masternak">@Masternak</a> 
+      </p>
+    </div>
+
+    <nav>
+      <ul class="sidebar-nav">
+        <li><a href="https://exactly-once.github.io/">Home</a> </li>
+        
+      </ul>
+    </nav>
+
+    <p>&copy; 2019. All rights reserved. </p>
+  </div>
+</aside>
+
+    <main class="content container">
+    <div class="post">
+  <h1>Consistent state</h1>
+  <time datetime=2019-10-11T00:00:00Z class="post-date">Fri, Oct 11, 2019</time>
+  
+
+<p>In the previous <a href="/posts/consistent-messaging">post</a> we talked about exactly-once processing looking at the endpoint from the outside. Here we will re-focus on an individual endpoint and see what exactly-once means for an endpoint&rsquo;s state.</p>
+
+<h3 id="it-s-not-about-the-execution-history">It&rsquo;s not about the execution history</h3>
+
+<p>Exactly-once spawned some heated debates in the past<sup class="footnote-ref" id="fnref:1"><a href="#fn:1">1</a></sup> so let&rsquo;s make sure we make it clear what it means in our context - or more importantly what it doesn&rsquo;t. Here we talk about exactly-once <strong>processing</strong> not <strong>delivery</strong>, the two being quite different things.</p>
+
+<p>The bad news is that exactly-once message <strong>delivery</strong> is not possible in a distributed system <sup class="footnote-ref" id="fnref:2"><a href="#fn:2">2</a></sup>. The good news is that we don&rsquo;t need it to build robust solutions. As long as the state is consistent (more on that in a second) we don&rsquo;t care about the message delivery and endpoint execution history.</p>
+
+<p>Let&rsquo;s look at a simple endpoint that stores items in order of their processing:</p>
+
+<figure>
+    <img src="/posts/consistent-state.jpg"/> <figcaption>
+            <h4>Consistent state updates</h4>
+        </figcaption>
+</figure>
+
+
+<p>In any scenario with multiple messages in-flight, there are many possible executions (depending on failures, concurrency, etc.). That said, if updated consistently, the end state always refects <strong>some</strong> logical exactly-once execution. Messages being delivered to an endpoint possibly multiple times are not a problem as long as the state changes as if each logical message was processed exactly once.</p>
+
+<p>It&rsquo;s important to note that there is no single &ldquo;state&rdquo;. Pretty much in any scenario, there are multiple resource types used by an endpoint and not all resources are equally important. Consistent, exactly-once message processing might be a must for the same e.g. relational databases storing business data. For others, like log files or performance metrics some inconsistency is tolerable.</p>
+
+<p>What this means is that we have to choose which resources need exactly-once. In many cases, this is a business-level decision.</p>
+
+<h3 id="consistency-inside-out">Consistency inside out</h3>
+
+<p>Now that we know what it means for an endpoint to be consistent on the <a href="consistent-messaging.md">outside</a> and from the inside, it&rsquo;s natural to ask how the two relate to each other.</p>
+
+<p>First, the state and messaging must reflect the same logical processing order. We need this to make sure that the messaging and state updates align in terms of the message order, and that the data written to the state and published in the messages do not contradict each other.</p>
+
+<p>Secondly, we don&rsquo;t need the state and external messaging to be atomically visible. It&rsquo;s fine if the state is updated before the messages are published or the other way round.</p>
+
+<h3 id="summary">Summary</h3>
+
+<p>It&rsquo;s one thing to know what is needed and another to design and build it. In the following parts of this series, we will look at the design aspects of exactly-once message processing. Stay tuned!</p>
+<div class="footnotes">
+
+<hr />
+
+<ol>
+<li id="fn:1">Valuable discussion is hard, especially when talking about two different things
+ <a class="footnote-return" href="#fnref:1"><sup>[return]</sup></a></li>
+<li id="fn:2"><a href="https://bravenewgeek.com/you-cannot-have-exactly-once-delivery/">You Cannot Have Exactly-Once Delivery</a> is an overview of the subject
+ <a class="footnote-return" href="#fnref:2"><sup>[return]</sup></a></li>
+</ol>
+</div>
+
+</div>
+
+
+    </main>
+
+    
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-147074711-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+  </body>
+</html>
