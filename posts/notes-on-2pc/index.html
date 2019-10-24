@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us" lang="en-us">
+<head>
+  <link href="//gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="generator" content="Hugo 0.55.6" />
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Notes on 2PC &middot; Exactly Once</title>
+
+  
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/print.css" media="print">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/poole.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/syntax.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/hyde.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Abril+Fatface|PT+Sans:400,400i,700">
+
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.png">
+
+  
+  
+</head>
+
+  <body class=" ">
+  <aside class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <a href="https://exactly-once.github.io/"><h1>Exactly Once</h1></a>
+      <p class="lead">
+       On distributed systems by <a href="http://twitter.com/SzymonPobiega">@SzymonPobiega</a> and <a href="http://twitter.com/Masternak">@Masternak</a> 
+      </p>
+    </div>
+
+    <nav>
+      <ul class="sidebar-nav">
+        <li><a href="https://exactly-once.github.io/">Home</a> </li>
+        
+      </ul>
+    </nav>
+
+    <p>&copy; 2019. All rights reserved. </p>
+  </div>
+</aside>
+
+    <main class="content container">
+    <div class="post">
+  <h1>Notes on 2PC</h1>
+  <time datetime=2019-10-24T00:00:00Z class="post-date">Thu, Oct 24, 2019</time>
+  
+
+<p>If there&rsquo;s a distributed protocol every software engineer knows it&rsquo;s Two-Phase Commit also know as 2PC. Although, in use for several decades<sup class="footnote-ref" id="fnref:1"><a href="#fn:1">1</a></sup>, it&rsquo;s been in steady decline mainly due to lack of support in cloud environments.</p>
+
+<p>For quite some time it was a de-facto standard for building enterprise distributed systems. That said, with the cloud becoming the default deployment model, designers need to learn how to build reliable systems without it.</p>
+
+<p>Answering the question of how 2PC can be replaced requires an understanding of what it was, that the protocol provided in the first place. In spite of its popularity, there are plenty of misconceptions around 2PC. This post aims to clarify at least some of these.</p>
+
+<p>NOTE: This is not &ldquo;yet another introduction to 2PC&rdquo;&trade;. If you need a refresher read one of many descriptions out there before continuing.</p>
+
+<h3 id="2pc-doesn-t-provide-transactions">2PC doesn&rsquo;t provide &ldquo;transactions&rdquo;</h3>
+
+<p>2PC is an atomic commit protocol meaning all participants will eventually commit if all voted &ldquo;YES&rdquo; or leave the system unchanged otherwise. When a commit operation triggered by the user finishes, either all local modifications have been applied or none of them has. The commit can take arbitrarily long to complete and in some failure scenarios, it will hang forever.</p>
+
+<p>Let&rsquo;s look at an example to see what we mean by &ldquo;no transactions&rdquo;. In our scenario, we have two participants: a database and a messages queue. The diagram shows 2PC execution after both participants voted &ldquo;YES&rdquo; and the coordinator is committing.</p>
+
+<figure>
+    <img src="/posts/2pc-atomic-visibility-scenario.jpg"/> <figcaption>
+            <h4>2PC atomic visibility</h4>
+        </figcaption>
+</figure>
+
+
+<p>Our example assumes that the queue transaction commits first, however, 2PC says nothing about the order in which the participants commit. It is nondeterministic and can change for the same set of participants on each execution.</p>
+
+<p>What&rsquo;s most interesting is the outside observer i.e. the client. It makes a read requests to both participants. The read request to the message queue arrives after the commit from the coordinator. This means that the read operation returns messages written to the queue in the transaction that just committed.</p>
+
+<p>In the case of the database, the read request arrives before the commit. What will be the result here? 2PC says nothing about this behavior - <strong>it&rsquo;s outside of the system model defined by the protocol</strong>. The read behavior isn&rsquo;t defined by the protocol but rather the deployment configuration.</p>
+
+<p>There are at least two possible behaviors. The read operation can:</p>
+
+<ul>
+<li>Block until the local transaction is committed - this will happen when local transaction operates in <code>Serializable</code> isolation level. This is the default configuration for Microsoft Distributed Transaction Coordinator<sup class="footnote-ref" id="fnref:2"><a href="#fn:2">2</a></sup>, and Microsoft SQL Server, but can be changed on a per-transaction basis,</li>
+<li>Return the last committed value (different from the one written by the local transaction) - this will happen when local transaction operates with <code>Snapshot</code> isolation.</li>
+</ul>
+
+<p>In summary, 2PC does not provide atomic visibility of writes in a system when there are transactions committed with 2PC and other local transactions running at the level of each participant. The exact behavior isn&rsquo;t defined by 2PC but depends on the concrete implementation of the protocol, resources involved, as well as deployment and runtime configuration.</p>
+
+<h3 id="2pc-can-be-high-available">2PC can be high available</h3>
+
+<p>Any non-trivial protocol defines failure conditions that it&rsquo;s able to tolerate and 2PC is no exception. What is specific to 2PC is that some types of failures can make participants get &ldquo;stuck&rdquo;. Whenever a participant votes &ldquo;YES&rdquo; it&rsquo;s unable to make any progress until hearing back from the coordinator.</p>
+
+<p>What might be the reasons for a participant getting stuck? First, the failure of the coordinator. Secondly, network partitioning between the coordinator and the participant<sup class="footnote-ref" id="fnref:3"><a href="#fn:3">3</a></sup>. The likelihood of getting stuck is conditioned by the coordinator&rsquo;s availability and the probability of network failure. By making the failures less likely we can make 2PC more available.</p>
+
+<figure>
+    <img src="/posts/2pc-no-progress.jpg"/> <figcaption>
+            <h4>Participant in the &#39;stuck&#39; state</h4>
+        </figcaption>
+</figure>
+
+
+<p>This touches on the implementation and configuration aspect already mentioned. For example in the MSDTC, the coordinator is a single process but can be deployed in a fail-over cluster mode. That is a deployment decision. There is also nothing in 2PC that prevents the coordinator from being implemented as a quorum of processes<sup class="footnote-ref" id="fnref:4"><a href="#fn:4">4</a></sup>.</p>
+
+<p>Finally, if all the parties (the coordinator and all the participants) are running in the same local network, on a single cluster or inside a single VM, then what is the probability of network partitioning?</p>
+
+<p>As always, context is king.</p>
+
+<h3 id="commit-latency-is-not-the-biggest-problem">Commit latency is not the biggest problem</h3>
+
+<p>Committing in 2PC requires 2 round trips between the coordinator and each participant, and there are <code>4n</code> messages generated, where <code>n</code> is the number of participants. This is sometimes viewed as the root cause of many practical problems with the protocol. It isn&rsquo;t ideal but only surfaces other, bigger problem.</p>
+
+<p>The problem is potential contention at the participant level caused by locking, especially when dealing with relational databases. Holding locks means that other transactions dealing with a given piece of state need to wait for the transaction to commit to make any progress.</p>
+
+<p>This situation exists without 2PC but the protocol makes is pretty much always worst as in 2PC the time the locks are held is defined by the slowest participant.</p>
+
+<h3 id="2pc-fits-the-cloud-quite-well">2PC fits the cloud quite well</h3>
+
+<p>It is well known that 2PC is used by the cloud vendors inside their services<sup class="footnote-ref" id="fnref:4"><a href="#fn:4">4</a></sup> and can be used by the users when running at the level of IaaS. That said, none of the cloud vendors support MSDTC and/or XA at the level of native cloud services i.e. native service can&rsquo;t participate in 2PC.</p>
+
+<p>Often, availability and performance are claimed to be the reasons for that. Although these two are not the strongest points of 2PC, it can be argued that security (or lack of it) is even more important.</p>
+
+<p>2PC assumes a high degree of trust between the participants and the coordinator. One could imagine an evil user operating a specially crafted coordinator to exhausts the participants&rsquo; resources by purposefully letting transactions hang in the &ldquo;stuck state&rdquo;.</p>
+
+<p>From the cloud vendor perspective that could have quite a damaging consequences. According to the protocol participant is not allowed to make any progress after voting &ldquo;YES&rdquo;. So in case of malicious coordinator, they would have to break the protocol or allow their resources to be blocked.</p>
+
+<p>Even if the cloud vendors provided their coordinators as the only valid option, a malicious participant could still cause a lot of harm. Enabling cloud services to act as 2PC participants is effectively opening doors for a Denial of Service (DoS) attack<sup class="footnote-ref" id="fnref:5"><a href="#fn:5">5</a></sup><sup class="footnote-ref" id="fnref:6"><a href="#fn:6">6</a></sup>.</p>
+
+<h3 id="2pc-is-not-the-only-commit-protocol">2PC is not the only commit protocol</h3>
+
+<p>2PC is just one possible solution to atomic commit. It works well in certain scenarios but performs poorly when used in an environment that violates its assumptions.</p>
+
+<p>In fact, there are very few assumptions that 2PC makes about the participants. Putting more constraints around transaction determinism allows for alternative approaches that minimize the lock holding time <sup class="footnote-ref" id="fnref:7"><a href="#fn:7">7</a></sup>.</p>
+
+<p>When we acknowledge the lack of atomic visibility and work with participants that guarantee commit success by their very nature (like message queues) it&rsquo;s possible to end up with a commit protocol that requires a single sequential write to each participant<sup class="footnote-ref" id="fnref:8"><a href="#fn:8">8</a></sup>.</p>
+
+<h2 id="summary">Summary</h2>
+
+<p>Hopefully, this post puts a bit more light on 2PC and what is it that we get from the protocol. Although the era of 2PC is coming to an end, it&rsquo;s good to know what guarantees we need to provide by other means in the systems we build.</p>
+<div class="footnotes">
+
+<hr />
+
+<ol>
+<li id="fn:1"><a href="http://www.cs.cmu.edu/~natassa/courses/15-823/F02/papers/p378-mohan.pdf">Transaction Management in the R* Distributed Database Management System</a> – Mohan et al. 1986
+ <a class="footnote-return" href="#fnref:1"><sup>[return]</sup></a></li>
+<li id="fn:2">an implementation of 2PC built into Windows
+ <a class="footnote-return" href="#fnref:2"><sup>[return]</sup></a></li>
+<li id="fn:3">these faults need to happen during the voting phase. There are extensions to the protocol like Cooperative Termination Protocol (CTP) that try to mitigate the &ldquo;stuck state&rdquo; problem but don&rsquo;t eliminate them in a general case.
+ <a class="footnote-return" href="#fnref:3"><sup>[return]</sup></a></li>
+<li id="fn:4"><em>&rdquo;(&hellip;) Running two-phase commit over Paxos mitigates the availability problems.&rdquo;</em> in <a href="https://static.googleusercontent.com/media/research.google.com/pl//pubs/archive/39966.pdf">Spanner: Google’s Globally-Distributed Database</a>
+ <a class="footnote-return" href="#fnref:4"><sup>[return]</sup></a></li>
+<li id="fn:5">the only case of 2PC in the cloud at the PaaS level we know of is <a href="https://docs.microsoft.com/en-us/azure/sql-database/sql-database-elastic-transactions-overview#limitations">Elastic Transactions</a> in Azure SQL DB. That said, the coordinator is part of the database instances and Azure SQL DBs are the only allowed participants.
+ <a class="footnote-return" href="#fnref:5"><sup>[return]</sup></a></li>
+<li id="fn:6"><em>&rdquo;(&hellip;) Ultimately, MSDTC is a single-node/cluster and local-network technology, which also manifests in its security model that is fairly difficult to adapt to a multitenant cloud system. (&hellip;)&rdquo;</em> by Clemens Vasters in <a href="http://vasters.com/archive/Distributed-Transactions-And-Virtualization.html">Distributed Transactions and Virtualization</a>
+ <a class="footnote-return" href="#fnref:6"><sup>[return]</sup></a></li>
+<li id="fn:7"><a href="http://dbmsmusings.blogspot.com/2019/01/its-time-to-move-on-from-two-phase.html">It&rsquo;s Time to Move on from two Phase Commit</a> by Daniel Abadi
+ <a class="footnote-return" href="#fnref:7"><sup>[return]</sup></a></li>
+<li id="fn:8"><a href="https://docs.particular.net/nservicebus/outbox/">Outbox pattern</a> is a commit protocol implementation that works on two participants and assumes that writing to the message queue is idempotent and will always succeed
+ <a class="footnote-return" href="#fnref:8"><sup>[return]</sup></a></li>
+</ol>
+</div>
+
+</div>
+
+
+    </main>
+
+    
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-147074711-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+  </body>
+</html>

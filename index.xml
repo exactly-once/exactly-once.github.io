@@ -6,10 +6,20 @@
     <description>Recent content on Exactly Once</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Fri, 11 Oct 2019 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 24 Oct 2019 00:00:00 +0000</lastBuildDate>
     
 	<atom:link href="https://exactly-once.github.io/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Notes on 2PC</title>
+      <link>https://exactly-once.github.io/posts/notes-on-2pc/</link>
+      <pubDate>Thu, 24 Oct 2019 00:00:00 +0000</pubDate>
+      
+      <guid>https://exactly-once.github.io/posts/notes-on-2pc/</guid>
+      <description>If there&amp;rsquo;s a distributed protocol every software engineer knows it&amp;rsquo;s Two-Phase Commit also know as 2PC. Although, in use for several decades1, it&amp;rsquo;s been in steady decline mainly due to lack of support in cloud environments.
+For quite some time it was a de-facto standard for building enterprise distributed systems. That said, with the cloud becoming the default deployment model, designers need to learn how to build reliable systems without it.</description>
+    </item>
     
     <item>
       <title>Consistent state</title>
