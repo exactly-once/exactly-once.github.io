@@ -6,10 +6,21 @@
     <description>Recent content on Exactly Once</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Thu, 24 Oct 2019 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Tue, 19 Nov 2019 00:00:00 +0000</lastBuildDate>
     
 	<atom:link href="https://exactly-once.github.io/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Messaging infrastructure</title>
+      <link>https://exactly-once.github.io/posts/messaging-infrastructure/</link>
+      <pubDate>Tue, 19 Nov 2019 00:00:00 +0000</pubDate>
+      
+      <guid>https://exactly-once.github.io/posts/messaging-infrastructure/</guid>
+      <description>The messaging infrastructure is all the components required to exchange messages between parts of the business logic code.
+There are two parts to the messaging infrastructure. One is the message broker that manages the message queues (and possibly topics). The other equally important part consists of all the libraries running in the same process as the application logic, that expose the API for processing messages.
+Whenever an application wants to send a message, it calls the in-process part of the messaging infrastructure which, in turn, communicates with the out-of-process part.</description>
+    </item>
     
     <item>
       <title>Notes on 2PC</title>

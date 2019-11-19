@@ -52,6 +52,19 @@
     <div class="posts">
 <article class="post">
   <h1 class="post-title">
+    <a href="https://exactly-once.github.io/posts/messaging-infrastructure/">Messaging infrastructure</a>
+  </h1>
+  <time datetime="2019-11-19T00:00:00Z" class="post-date">Tue, Nov 19, 2019</time>
+  The messaging infrastructure is all the components required to exchange messages between parts of the business logic code.
+There are two parts to the messaging infrastructure. One is the message broker that manages the message queues (and possibly topics). The other equally important part consists of all the libraries running in the same process as the application logic, that expose the API for processing messages.
+Whenever an application wants to send a message, it calls the in-process part of the messaging infrastructure which, in turn, communicates with the out-of-process part.
+  
+  <div class="read-more-link">
+    <a href="/posts/messaging-infrastructure/">Read More…</a>
+  </div>
+  
+</article><article class="post">
+  <h1 class="post-title">
     <a href="https://exactly-once.github.io/posts/notes-on-2pc/">Notes on 2PC</a>
   </h1>
   <time datetime="2019-10-24T00:00:00Z" class="post-date">Thu, Oct 24, 2019</time>
