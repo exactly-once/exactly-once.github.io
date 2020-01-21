@@ -6,10 +6,19 @@
     <description>Recent content in Posts on Exactly Once</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Tue, 19 Nov 2019 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Tue, 21 Jan 2020 00:00:00 +0000</lastBuildDate>
     
 	<atom:link href="https://exactly-once.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Distributed business processes</title>
+      <link>https://exactly-once.github.io/posts/distributed-business-processes/</link>
+      <pubDate>Tue, 21 Jan 2020 00:00:00 +0000</pubDate>
+      
+      <guid>https://exactly-once.github.io/posts/distributed-business-processes/</guid>
+      <description>In the previous post we explained what a messaging infrastructure is. We showed that it is necessarily a distributed thing with parts running in different processes. We&amp;rsquo;ve seen the trade-offs involved in building the messaging infrastructure and what conditions must be met to guarantee consistent message processing on top of such infrastructure. This time we will explain why it is reasonable to expect that most line-of-business systems require a messaging infrastructure.</description>
+    </item>
     
     <item>
       <title>Messaging infrastructure</title>

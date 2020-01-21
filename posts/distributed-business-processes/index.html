@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us" lang="en-us">
+<head>
+  <link href="//gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="generator" content="Hugo 0.55.6" />
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Distributed business processes &middot; Exactly Once</title>
+
+  
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/print.css" media="print">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/poole.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/syntax.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/hyde.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Abril+Fatface|PT+Sans:400,400i,700">
+
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.png">
+
+  
+  
+</head>
+
+  <body class=" ">
+  <aside class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <a href="https://exactly-once.github.io/"><h1>Exactly Once</h1></a>
+      <p class="lead">
+       On distributed systems by <a href="http://twitter.com/SzymonPobiega">@SzymonPobiega</a> and <a href="http://twitter.com/Masternak">@Masternak</a> 
+      </p>
+    </div>
+
+    <nav>
+      <ul class="sidebar-nav">
+        <li><a href="https://exactly-once.github.io/">Home</a> </li>
+        
+      </ul>
+    </nav>
+
+    <p>&copy; 2020. All rights reserved. </p>
+  </div>
+</aside>
+
+    <main class="content container">
+    <div class="post">
+  <h1>Distributed business processes</h1>
+  <span class="post-date">by Tomek Masternak, Szymon Pobiega</span>
+  
+  
+
+<p>In the <a href="https://exactly-once.github.io/posts/messaging-infrastructure/">previous post</a> we explained what a messaging infrastructure is. We showed that it is necessarily a distributed thing with parts running in different processes. We&rsquo;ve seen the trade-offs involved in building the messaging infrastructure and what conditions must be met to guarantee consistent message processing on top of such infrastructure. This time we will explain why it is reasonable to expect that most line-of-business systems require a messaging infrastructure.</p>
+
+<h2 id="architecture-is-not-an-exact-science">Architecture is not an exact science</h2>
+
+<p>There are two types of architects out there. There are ones that will tell you exactly what patterns and technologies you should use even before you have a chance to explain what is the problem your system is solving. There are also ones that will tell you either &ldquo;it depends&rdquo; or &ldquo;your mileage may vary&rdquo; even if you have given them the exact specification of the application. That says a lot.</p>
+
+<p>Software architecture is not an exact science. There are hardly any rules backed by solid research. Most of it boils down to which conference you have attended recently. But do not despair. It turns out that if you look under the buzzword-ridden surface, there are concepts out there that can be studied with more rigor.</p>
+
+<h2 id="state-change">State change</h2>
+
+<p>The most fundamental thing in line-of-business software is a state change. State changes are the very reason we build such software. A system reacts to real-world events by changing its internal state - when you click &ldquo;submit&rdquo; an order entity is created. Conversely, a state change of the system triggers an event in the real world - when order state changes to &ldquo;payment succeeded&rdquo; the parcel is dispatched to the courier.</p>
+
+<figure>
+    <img src="/posts/software-system.png"/> <figcaption>
+            <h4>Software system</h4>
+        </figcaption>
+</figure>
+
+
+<h2 id="chains-of-state-changes">Chains of state changes</h2>
+
+<p>A system as described above consists of a single data store and a single processing component. That is not how modern software systems are built. Regardless of your approach to architecture, the system is, sooner or later, going to consist of multiple components. One common thing that we can identify in such a system are chains of state changes, one change triggering another.</p>
+
+<figure>
+    <img src="/posts/chain.png"/> <figcaption>
+            <h4>Chains of state changes</h4>
+        </figcaption>
+</figure>
+
+
+<p>When you click &ldquo;submit&rdquo;, the order and shipment entities are created. When the payment succeeds the order entity is modified. But that&rsquo;s not enough to get your new phone delivered to your door. When the order state is set to &ldquo;payment succeeded&rdquo;, the shipment entity has to be modified too to trigger the delivery. One state change causes another state change, possibly in another part of the system.</p>
+
+<h2 id="distributed-business-processes">Distributed business processes</h2>
+
+<p>We call these chains of state changes, one triggering another, distributed business processes. You can find them in most line-of-business systems. They are interesting because they are independent of the architectural approach taken.</p>
+
+<p>Looking at the distributed business processes more formally, we can describe them using the following statements:
+- if the initial change has been persisted, the follow-up changes will eventually be persisted too
+- for each instance of initial state change, the follow-up state change has to occur exactly once
+- the follow-up step is only triggered after the initial step has been durably persisted</p>
+
+<p>A necessary element of each distributed business process is communication. The fact that the initial state change has occurred needs to be communicated to the code that executes the follow-up change. Let&rsquo;s see what is required for such communication.</p>
+
+<h3 id="reliability">Reliability</h3>
+
+<p>We want the communication to be reliable to make sure that the message triggering the follow-up change is not lost.</p>
+
+<h3 id="de-duplication">De-duplication</h3>
+
+<p>We want the messages that trigger the follow-up change to be de-duplicated in such a way that if the follow-up change is already persisted, receiving another copy of the trigger message has no effect.</p>
+
+<h3 id="causal-order">Causal order</h3>
+
+<p>We want the message that triggers the follow-up change to not be delivered before the initial state change is durably persisted.</p>
+
+<h2 id="consistent-messaging">Consistent messaging</h2>
+
+<p>We mentioned <a href="https://exactly-once.github.io/posts/consistent-messaging/">consistent messaging</a> before</p>
+
+<blockquote>
+<p>we want an endpoint to produce observable side-effects equivalent to some execution in which each logical message gets processed exactly-once. Equivalent meaning that it’s indistinguishable from the perspective of any other endpoint.</p>
+</blockquote>
+
+<p>Now we can see that this definition is not enough to guarantee robust and non-confusing distributed business process execution. We need causal order and reliable delivery in addition to the above. That translates to an additional clause:</p>
+
+<blockquote>
+<p>if message processing includes state changes and sending out messages, the state changes should be visible to the outside observer before messages get sent.</p>
+</blockquote>
+
+<h2 id="idempotence-is-not-enough">Idempotence is not enough</h2>
+
+<p>It is a common misconception that idempotence, as a property of a persistence code, is all that is required to build distributed systems. Well, not when distributed business processes are considered. Let&rsquo;s assume that the operation that applies a state change is idempotent. That means it can be applied multiple times and the side effects (in this case the state of the data) is the same as if it was applied only once.</p>
+
+<p>We will now use that idempotent state change operation in our message handler. The handler is receiving messages and sending out messages to trigger the follow-up state change.</p>
+
+<p>The handler receives a message and invokes the idempotent state change operation. Now we should send out a message that informs about the state change. But what state change? We don&rsquo;t know if any state change occurred as part of this execution. All we know is the current state is exactly as if the change occurred exactly once. The only message we can send would carry the current state. Such a message is useless as far as distributed business processes are concerned because it cannot trigger any follow-up changes. The distributed business process cannot continue.</p>
+
+<h2 id="layered-model">Layered model</h2>
+
+<p>Based on the above one can create a model of a distributed system that consists of three layers.</p>
+
+<figure>
+    <img src="/posts/layers.png"/> <figcaption>
+            <h4>Layers</h4>
+        </figcaption>
+</figure>
+
+
+<p>The first layer is the input layer. It consists of components that handle synchronous communication with the external world. The famous shopping basket component fits here.</p>
+
+<p>Next up is the core layer. Between the input and the core layers, there is the <a href="https://exactly-once.github.io/posts/sync-async-boundary/">sync-async boundary</a>. Components sitting at the boundary generate async messages compatible with consistent messaging rules based on the data captured in the input layer. The core layer consists of message handlers capable of communicating according to the rules of consistent messaging. Distributed business processes such as the order handling process or shipping process live here.</p>
+
+<p>The third layer is the output layer, consisting of message handlers that are <em>merely</em> idempotent. Although their logic handles duplicate messages correctly, they are not able to emit messages that could trigger follow-up state transitions. You might find here a message handler that processes an <code>InvoiceRequested</code> event and generates a PDF document to be stored in the Blob Storage. If the triggering message gets duplicated, the handler will generate another copy of the PDF document but will detect duplication when attempting to store a new blob. You might also find here a handler that processes <code>AuthorizeCreditCard</code> commands and calls external payment API. Because such a handler takes the <code>PaymentId</code> field of the incoming message and sends as <code>TransactionReference</code> to the payment provider, that provider can correctly de-duplicate calls. In this model messages always flow left-to-right between the layers. Inter-layer messages are only allowed in the core layer.</p>
+
+<p>Can you fit your distributed system into this model? We would like to hear your opinions. Challenge us on Twitter!</p>
+
+</div>
+
+
+    </main>
+
+    
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-147074711-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+  </body>
+</html>
