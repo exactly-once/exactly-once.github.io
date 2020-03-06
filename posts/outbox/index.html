@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us" lang="en-us">
+<head>
+  <link href="//gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="generator" content="Hugo 0.55.6" />
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Outbox &middot; Exactly Once</title>
+
+  
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/print.css" media="print">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/poole.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/syntax.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/hyde.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Abril+Fatface|PT+Sans:400,400i,700">
+
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.png">
+
+  
+  
+</head>
+
+  <body class=" ">
+  <aside class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <a href="https://exactly-once.github.io/"><h1>Exactly Once</h1></a>
+      <p class="lead">
+       On distributed systems by <a href="http://twitter.com/SzymonPobiega">@SzymonPobiega</a> and <a href="http://twitter.com/Masternak">@Masternak</a> 
+      </p>
+    </div>
+
+    <nav>
+      <ul class="sidebar-nav">
+        <li><a href="https://exactly-once.github.io/">Home</a> </li>
+        
+      </ul>
+    </nav>
+
+    <p>&copy; 2020. All rights reserved. </p>
+  </div>
+</aside>
+
+    <main class="content container">
+    <div class="post">
+  <h1>Outbox</h1>
+  <span class="post-date">by Tomek Masternak, Szymon Pobiega</span>
+  
+  
+
+<p>In the previous post we have shown how consistent messaging can be implemented by storing point-in-time state snapshots and using these snapshots for publishing outgoing messages. We discussed some pros and cons of this approach. This time we will focus on the alternative approach which is based on storing the outgoing messages before they are dispatched.</p>
+
+<p>Consistent messaging requires the ability to ensure exactly same side effects (in form of the outgoing messages) each time a copy of a given incoming message is processed. One way of fulfilling that requirement is to capture and persist these side effects as part of the state of the object. Once persisted, these side effects can be re-played each time a copy of the incoming message is received. The main advantage of this approach is simplicity. The user no longer needs to worry about making the processing logic deterministic (including accessing system clock or random number generator). Note that with this approach the business code may still be invoked multiple times but result of only one invocation is persisted.</p>
+
+<p>The following code ensures the consistency of the message processing done by our business object.</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span>var entity <span style="color:#f92672">=</span> await persister.LoadByCorrelationId(correlationId)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span>                   <span style="color:#f92672">??</span> new Entity { Id <span style="color:#f92672">=</span> correlationId };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span>TransportOperation[] outgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span><span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>entity.OutboxState.ContainsKey(messageId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span>    var state <span style="color:#f92672">=</span> (T)entity.BusinessState <span style="color:#f92672">??</span> new T();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span>    var (newState, pendingTransportOperations) <span style="color:#f92672">=</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span>        await handlerCallback(state, context);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12</span>    outgoingMessages <span style="color:#f92672">=</span> pendingTransportOperations.Operations
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13</span>                                                 .Serialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15</span>    entity.BusinessState <span style="color:#f92672">=</span> newState;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16</span>    entity.OutboxState[messageId] <span style="color:#f92672">=</span> new OutboxState
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17</span>    {
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18</span>        OutgoingMessages <span style="color:#f92672">=</span> outgoingMessages
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19</span>    };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21</span>    await persister.Persist(entity);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23</span><span style="color:#66d9ef">else</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25</span>    outgoingMessages <span style="color:#f92672">=</span> entity.OutboxState[messageId]
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26</span>                             .OutgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29</span><span style="color:#66d9ef">if</span> (outgoingMessages <span style="color:#f92672">!=</span> null)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31</span>    var toDispatch <span style="color:#f92672">=</span> outgoingMessages.Deserialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32</span>    await Dispatch<span style="color:#f92672">&lt;</span>T<span style="color:#f92672">&gt;</span>(context, toDispatch);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34</span>    entity.OutboxState[messageId].OutgoingMessages <span style="color:#f92672">=</span> null;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36</span>    await persister.Persist(entity);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37</span>}</code></pre></div>
+
+<p>That&rsquo;s a lot of code so to understand that better, let&rsquo;s examine it piece-by-piece. First, we need to load the state of our business component.</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1</span>var entity <span style="color:#f92672">=</span> await persister.LoadByCorrelationId(correlationId)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2</span>             <span style="color:#f92672">??</span> new Entity { Id <span style="color:#f92672">=</span> correlationId };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4</span>TransportOperation[] outgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5</span><span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>entity.OutboxState.ContainsKey(messageId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6</span>{</code></pre></div>
+
+<p>The actual stored record contains two parts. There is the business state but there is also message processing state &ndash; <code>OutboxState</code>. That structure is a map that associates ID of an incoming message with a collection of outgoing messages that were produced during processing. When a message handler receives a message, it loads the state and inspects the <em>Outbox</em> to check if it contains an entry for the ID of the incoming message. If there is no corresponding entry, it means that a given message has not been processed yet.</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1</span>var state <span style="color:#f92672">=</span> (T)entity.State <span style="color:#f92672">??</span> new T();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2</span>var (newState, pendingTransportOperations) <span style="color:#f92672">=</span> 
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3</span>                        await handlerCallback(state, context);</code></pre></div>
+
+<p>In that case we invoke the business logic (<code>handlerCallback</code>) that returns a tuple containing a new value of the business state and a collection of <code>pendingTransportOperations</code> &ndash; messages that were generated and are to be dispatched. Now we need to take both these pieces, stick them into the container and make sure they are stored durably in a <em>single atomic operation</em>.</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span>outgoingMessages <span style="color:#f92672">=</span> pendingTransportOperations.Operations
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span>                                             .Serialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span>entity.BusinessState <span style="color:#f92672">=</span> newState;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span>entity.OutboxState[messageId] <span style="color:#f92672">=</span> new OutboxState
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span>    OutgoingMessages <span style="color:#f92672">=</span> outgoingMessages
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span>};
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span>await persister.Persist(stateContainer);</code></pre></div>
+
+<p>Let&rsquo;s go back and look at the other branch of the <code>if</code> statement. What if the condition</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1</span><span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>entity.OutboxState.ContainsKey(messageId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2</span>{</code></pre></div>
+
+<p>is false. What if the <em>Outbox</em> state already contains an entry for a given ID? That means we have already processed another copy of the incoming message. There are two possible reasons for this. The message may simply be a duplicate. Another possibility is that there had been only a single copy of the message but the first time we attempted to process it, we failed to dispatch the outgoing messages and the incoming message has been returned to the queue.</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1</span>outgoingMessages <span style="color:#f92672">=</span> entity.OutboxState[messageId].OutgoingMessages;</code></pre></div>
+
+<p>What&rsquo;s next? We can not push the outgoing messages to the transport and we are done. If another copy of the message comes in, the business logic will not be invoked and the persisted outgoing messages will be dispatched again. That behavior is correct but is not optimal for two reasons. First, it means that each time an incoming message is duplicated, the outgoing messages will get duplicated too. These outgoing messages get to another endpoint and cause duplicates there, too. We are not using the bandwith responsibly. Second problem is the fact that these outgoing messages take up preceious space in our entity, making it slower and slower to load and store it.</p>
+
+<p>We can solve both problems by adding the optimization visible in the following snippet</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1</span><span style="color:#66d9ef">if</span> (outgoingMessages <span style="color:#f92672">!=</span> null)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3</span>    var toDispatch <span style="color:#f92672">=</span> outgoingMessages.Deserialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4</span>    await Dispatch<span style="color:#f92672">&lt;</span>T<span style="color:#f92672">&gt;</span>(context, toDispatch);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6</span>    stateContainer.OutboxState[messageId].OutgoingMessages <span style="color:#f92672">=</span> null;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">8</span>    await persister.Persist(stateContainer);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">9</span>}</code></pre></div>
+
+<p>The idea is to mark the fact that we managed to dispatch the outgoing messages. The easiest way is to set the outgoing messages collection to <code>null</code>.</p>
+
+<h2 id="summary">Summary</h2>
+
+<p>As you can see, the <em>Outbox</em> pattern is fairly straightforward. It can be implemented on top of any data store and does not require event sourced approach to persistence. You are probably wondering now what are the downsides. There is a couple. We will deal with them one by one.</p>
+
+<p>The first issue is related to how the processed message information is stored. In case of the <em>Outbox</em>, it is part of the same document as the business state. This means that the more messages we process, the bigger the document becomes. The bigger it becomes, the more time it takes to process a single message. It is worth mentioning that some popular data stores, such as Azure Tables or AWS Dynamo, have strict limits on the data size.</p>
+
+<p>The second issue is actually something that affects both solutions we&rsquo;ve discussed so far. The problem is related to how long the de-duplication data is retained. Both solutions lack a deterministic way of evicting information about processed messages. The only option is to use the wall clock to delete information older than certain threshold. This strategy is based on the assumption that duplicates are much more likely to be placed closely on the time axis. In other words, it is much more likely to receive a duplicate 5 milliseconds after the original message than after 5 days. While this assumption seems reasonable, it might not hold true in cases of catastrophic failures where part of the messaging infrastructure is down for considerable amount of time and, when it goes up again, re-plays all the messages already processed.</p>
+
+<p>In the subsequent posts we will discuss solutions to deal with both of these problems. Stay tuned!</p>
+
+</div>
+
+
+    </main>
+
+    
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-147074711-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+  </body>
+</html>

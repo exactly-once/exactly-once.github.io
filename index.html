@@ -52,6 +52,18 @@
     <div class="posts">
 <article class="post">
   <h1 class="post-title">
+    <a href="https://exactly-once.github.io/posts/outbox/">Outbox</a>
+  </h1>
+  <time datetime="2020-03-06T00:00:00Z" class="post-date">Fri, Mar 6, 2020</time>
+  In the previous post we have shown how consistent messaging can be implemented by storing point-in-time state snapshots and using these snapshots for publishing outgoing messages. We discussed some pros and cons of this approach. This time we will focus on the alternative approach which is based on storing the outgoing messages before they are dispatched.
+Consistent messaging requires the ability to ensure exactly same side effects (in form of the outgoing messages) each time a copy of a given incoming message is processed.
+  
+  <div class="read-more-link">
+    <a href="/posts/outbox/">Read More…</a>
+  </div>
+  
+</article><article class="post">
+  <h1 class="post-title">
     <a href="https://exactly-once.github.io/posts/state-based-consistent-messaging/">State-based consistent messaging</a>
   </h1>
   <time datetime="2020-02-03T00:00:00Z" class="post-date">Mon, Feb 3, 2020</time>
