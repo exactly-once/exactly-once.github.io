@@ -4,7 +4,18 @@
   
   <url>
     <loc>https://exactly-once.github.io/</loc>
-    <lastmod>2020-03-06T00:00:00+00:00</lastmod>
+    <lastmod>2020-05-20T00:00:00+00:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>https://exactly-once.github.io/posts/exactly-once-delivery/</loc>
+    <lastmod>2020-05-20T00:00:00+00:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>https://exactly-once.github.io/posts/</loc>
+    <lastmod>2020-05-20T00:00:00+00:00</lastmod>
     <priority>0</priority>
   </url>
   
@@ -14,14 +25,8 @@
   </url>
   
   <url>
-    <loc>https://exactly-once.github.io/posts/</loc>
-    <lastmod>2020-03-06T00:00:00+00:00</lastmod>
-    <priority>0</priority>
-  </url>
-  
-  <url>
     <loc>https://exactly-once.github.io/posts/state-based-consistent-messaging/</loc>
-    <lastmod>2020-02-03T00:00:00+00:00</lastmod>
+    <lastmod>2020-03-02T00:00:00+00:00</lastmod>
   </url>
   
   <url>

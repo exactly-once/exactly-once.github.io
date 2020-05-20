@@ -52,6 +52,17 @@
     <div class="posts">
 <article class="post">
   <h1 class="post-title">
+    <a href="https://exactly-once.github.io/posts/exactly-once-delivery/">Exactly-once message delivery</a>
+  </h1>
+  <time datetime="2020-05-20T00:00:00Z" class="post-date">Wed, May 20, 2020</time>
+  It is widely known that exactly-once message delivery is impossible in a distributed system. But what is exactly-once delivery? To answer this question we need to first ask what do we understand as message delivery. This is not an easy task. In real life the receiving system is not a single blob of code. It consists of multiple layers. Is the message considered delivered when all its bytes are read from the network cable?
+  
+  <div class="read-more-link">
+    <a href="/posts/exactly-once-delivery/">Read More…</a>
+  </div>
+  
+</article><article class="post">
+  <h1 class="post-title">
     <a href="https://exactly-once.github.io/posts/outbox/">Outbox</a>
   </h1>
   <time datetime="2020-03-06T00:00:00Z" class="post-date">Fri, Mar 6, 2020</time>
@@ -66,7 +77,7 @@ Consistent messaging requires the ability to ensure exactly same side effects (i
   <h1 class="post-title">
     <a href="https://exactly-once.github.io/posts/state-based-consistent-messaging/">State-based consistent messaging</a>
   </h1>
-  <time datetime="2020-02-03T00:00:00Z" class="post-date">Mon, Feb 3, 2020</time>
+  <time datetime="2020-03-02T00:00:00Z" class="post-date">Mon, Mar 2, 2020</time>
   In the previous posts, we described consistent messaging and justified its usefulness in building robust distributed systems. Enough with the theory, it&rsquo;s high time to show some code! First comes the state-based approach.
 Context State-based consistent messaging comes with two requirements:
  &ldquo;Point-in-time&rdquo; state availability - it&rsquo;s possible to restore any past version of the state. Deterministic message handling logic - for a set state and input message every handler execution gives the same result.

@@ -6,10 +6,19 @@
     <description>Recent content in Posts on Exactly Once</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Fri, 06 Mar 2020 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 20 May 2020 00:00:00 +0000</lastBuildDate>
     
 	<atom:link href="https://exactly-once.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Exactly-once message delivery</title>
+      <link>https://exactly-once.github.io/posts/exactly-once-delivery/</link>
+      <pubDate>Wed, 20 May 2020 00:00:00 +0000</pubDate>
+      
+      <guid>https://exactly-once.github.io/posts/exactly-once-delivery/</guid>
+      <description>It is widely known that exactly-once message delivery is impossible in a distributed system. But what is exactly-once delivery? To answer this question we need to first ask what do we understand as message delivery. This is not an easy task. In real life the receiving system is not a single blob of code. It consists of multiple layers. Is the message considered delivered when all its bytes are read from the network cable?</description>
+    </item>
     
     <item>
       <title>Outbox</title>
@@ -24,7 +33,7 @@ Consistent messaging requires the ability to ensure exactly same side effects (i
     <item>
       <title>State-based consistent messaging</title>
       <link>https://exactly-once.github.io/posts/state-based-consistent-messaging/</link>
-      <pubDate>Mon, 03 Feb 2020 00:00:00 +0000</pubDate>
+      <pubDate>Mon, 02 Mar 2020 00:00:00 +0000</pubDate>
       
       <guid>https://exactly-once.github.io/posts/state-based-consistent-messaging/</guid>
       <description>In the previous posts, we described consistent messaging and justified its usefulness in building robust distributed systems. Enough with the theory, it&amp;rsquo;s high time to show some code! First comes the state-based approach.
