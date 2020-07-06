@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Exactly Once</title>
@@ -6,10 +6,19 @@
     <description>Recent content on Exactly Once</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Wed, 20 May 2020 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 06 Jul 2020 00:00:00 +0000</lastBuildDate>
     
 	<atom:link href="https://exactly-once.github.io/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Exactly-once intuition</title>
+      <link>https://exactly-once.github.io/posts/intuition/</link>
+      <pubDate>Mon, 06 Jul 2020 00:00:00 +0000</pubDate>
+      
+      <guid>https://exactly-once.github.io/posts/intuition/</guid>
+      <description>Distributed algorithms are difficult. If you find yourself struggling to understand one of them, we assure you &amp;ndash; you are not alone. We have spent last couple of years researching ways to ensure exactly-once message processing in systems that exchange messages in an asynchronous and durable way (a.k.a. message queues) and you know what? We still struggle and make silly mistakes. The reason is that even a very simple distributed algorithm generates vast numbers of possible execution paths.</description>
+    </item>
     
     <item>
       <title>Exactly-once message delivery</title>
