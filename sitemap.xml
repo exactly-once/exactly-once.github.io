@@ -4,16 +4,21 @@
   
   <url>
     <loc>https://exactly-once.github.io/</loc>
-    <lastmod>2020-07-06T00:00:00+00:00</lastmod>
+    <lastmod>2020-07-14T00:00:00+00:00</lastmod>
   </url>
   
   <url>
-    <loc>https://exactly-once.github.io/posts/intuition/</loc>
-    <lastmod>2020-07-06T00:00:00+00:00</lastmod>
+    <loc>https://exactly-once.github.io/posts/model-checking-exactly-once/</loc>
+    <lastmod>2020-07-14T00:00:00+00:00</lastmod>
   </url>
   
   <url>
     <loc>https://exactly-once.github.io/posts/</loc>
+    <lastmod>2020-07-14T00:00:00+00:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>https://exactly-once.github.io/posts/intuition/</loc>
     <lastmod>2020-07-06T00:00:00+00:00</lastmod>
   </url>
   

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us" lang="en-us">
+<head>
+  <link href="//gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="generator" content="Hugo 0.72.0" />
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Model checking exactly-once &middot; Exactly Once</title>
+
+  
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/print.css" media="print">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/poole.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/syntax.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/hyde.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Abril+Fatface|PT+Sans:400,400i,700">
+
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.png">
+
+  
+  
+</head>
+
+  <body class=" ">
+  <aside class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <a href="https://exactly-once.github.io/"><h1>Exactly Once</h1></a>
+      <p class="lead">
+       On distributed systems by <a href="http://twitter.com/SzymonPobiega">@SzymonPobiega</a> and <a href="http://twitter.com/Masternak">@Masternak</a> 
+      </p>
+    </div>
+
+    <nav>
+      <ul class="sidebar-nav">
+        <li><a href="https://exactly-once.github.io/">Home</a> </li>
+        
+      </ul>
+    </nav>
+
+    <p>&copy; 2020. All rights reserved. </p>
+  </div>
+</aside>
+
+    <main class="content container">
+    <div class="post">
+  <h1>Model checking exactly-once</h1>
+  <span class="post-date">by Tomek Masternak, Szymon Pobiega</span>
+  
+  <p>Designing distributed algorithms is a challenging task. It&rsquo;s not that hard to reason about &ldquo;happy paths&rdquo; and show that at least sometimes the algorithm does what we intended. Checking that it <strong>always</strong> behaves as expected is a completely different story.</p>
+<p>By definition, any non-trivial distributed system is concurrent and fails partially. Both elements adding up to the combinatorial explosion of possible executions - too many to fit in a single person&rsquo;s head or analyze by hand. Fortunately, there are well-established verification methods we can use to do more rigorous testing.</p>
+<h3 id="welcome-to-tla">Welcome to TLA+</h3>
+<p>If there&rsquo;s one person to know in Distributed Systems research it&rsquo;s <a href="https://en.wikipedia.org/wiki/Leslie_Lamport">Mr. Leslie Lamport</a>. He&rsquo;s a father to many discoveries and inventions in this area, including formal verification techniques. Since 1999 he&rsquo;s been working on TLA+ - a specification language, and TLC - a checker for validating claims about models expressed in the language<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>.</p>
+<p>In this post, we are not going to introduce you to TLA+ but rather provide some intuition and context needed to understand how we used it to validate exactly-once algorithms. If you are new to the subject we encourage you to have a closer look. There are several resources available on-line<sup id="fnref:2"><a href="#fn:2" class="footnote-ref" role="doc-noteref">2</a></sup> that do an awesome job at teaching TLA+.</p>
+<h3 id="modelling-systems-with-tla">Modelling systems with TLA+</h3>
+<p>TLA+ is a specification language for describing digital systems. A model of a system expressed in TLA+ consists of two elements: an initial state, and a next-state relation. The relation links a state to a set of possible next states. The fact that there might be several possible next states enables expressing nondeterministic behaviors caused by concurrent processing and partial failures.</p>
+<p>Applying the next-state relation on the initial and the following states generates all possible system executions - sequences of state transitions the system can take. Such a model is a directed graph where nodes are states and there is an edge from state A to state B if B belongs to the next states set of A. Any possible execution of the system is some path in that graph. Validating the model is checking that some properties are true for all the paths.</p>
+<figure>
+    <img src="/posts/model-checking-state-space-example.png"/> <figcaption>
+            <h4>CAN bus protocol model visualization.</h4><p><a href="https://www3.hhu.de/stups/prob/index.php/File:CANBus_sfdp.png">https://www3.hhu.de/stups/prob/index.php/File:CANBus_sfdp.png</a></p>
+        </figcaption>
+</figure>
+
+<p>The first step in using TLA+ is to create a model of the system. By definition, a model is a simplification, in our concrete case, a reduction necessary to make the verification feasible. We need to express only the essential parts of our system, otherwise, the state space size (number of unique system states) will be too big for the checker to handle. As with any modeling activity figuring out what are the important parts is the tricky bit.</p>
+<p>We already touched on the subject in the introduction saying that distributed systems are mainly about concurrency and partial failures. Our goal is to verify that the system behaves as expected in the face of this reality. As a result, nondeterminism caused by concurrency and possible failures are the key elements that should make it to the model.</p>
+<p>Finally, a note of caution. To create a useful model one needs a thorough understanding of the system. It requires a good understanding of the communication middleware, storage systems, libraries, etc. to properly express their concurrency and failure characteristics. It might be tempting to start with the model but based on our experience we wouldn&rsquo;t recommend this route<sup id="fnref:3"><a href="#fn:3" class="footnote-ref" role="doc-noteref">3</a></sup>.</p>
+<h3 id="modelling-exactly-once">Modelling exactly-once</h3>
+<p>We are not going to look at the specification line-by-line - we encourage all the readers to have a look at the <a href="https://github.com/exactly-once/model-checking/blob/15b007f5ce403f1e4f8bd0a52bf73abee9085570/exactly_once_none_atomic.tla">source code</a> for the complete picture. We used PlusCal to create the model - a Pascal-like language that gets transpiled to TLA+ by the toolbox. We think PlusCal makes it easier to understand the logic of the algorithm - especially for the newcomers.</p>
+<p><a href="https://github.com/exactly-once/model-checking/blob/master/exactly_once_none_atomic.tla">The specification</a> models a system with the following attributes:</p>
+<ul>
+<li>Business datastore supports optimistic concurrency control on writes</li>
+<li>There are no atomic writes between outbox storage and business datastore</li>
+<li>Message is picked from the queue and processed concurrently by the handlers</li>
+<li>Logical messages are duplicated</li>
+<li>We assume linearizabile consistency model for outbox and datastore<sup id="fnref:4"><a href="#fn:4" class="footnote-ref" role="doc-noteref">4</a></sup></li>
+</ul>
+<p>The main goal of the specification is to enable model checking that the system behaves in an exactly-once way.</p>
+<h4 id="scafolding">Scafolding</h4>
+<p>We will start with the scaffold for the specification, modeling input and output queues, business data storage, and message handlers.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-prolog" data-lang="prolog"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span>CONSTANTS MessageCount, DupCount, NULL
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span>IsEmpty(T) <span style="color:#f92672">==</span> Cardinality(T) <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span>Processes <span style="color:#f92672">==</span> <span style="color:#ae81ff">1..2</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span>MessageIds <span style="color:#f92672">==</span> <span style="color:#ae81ff">1.</span>.MessageCount
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span>DupIds <span style="color:#f92672">==</span> <span style="color:#ae81ff">1.</span>.DupCount
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span>VersionIds <span style="color:#f92672">==</span> <span style="color:#ae81ff">0..2</span><span style="color:#f92672">*</span>MessageCount
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span>TxIdx <span style="color:#f92672">==</span> <span style="color:#ae81ff">1.</span>.MessageCount<span style="color:#f92672">*</span>DupCount
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span>(<span style="color:#e6db74">*--algorithm</span> <span style="color:#e6db74">exactly</span><span style="color:#f92672">-</span><span style="color:#e6db74">once</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12</span><span style="color:#e6db74">variables</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13</span>    <span style="color:#e6db74">inputQueue</span> <span style="color:#f92672">=</span> [<span style="color:#e6db74">id</span> <span style="color:#e6db74">:</span> MessageIds, <span style="color:#e6db74">dupId</span> <span style="color:#e6db74">:</span> DupIds],
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14</span>    <span style="color:#e6db74">store</span> <span style="color:#f92672">=</span> [<span style="color:#e6db74">history</span> |<span style="color:#e6db74">-&gt;</span> <span style="color:#e6db74">&lt;&lt;&gt;&gt;</span>, <span style="color:#e6db74">ver</span> |<span style="color:#e6db74">-&gt;</span> <span style="color:#ae81ff">0</span>, <span style="color:#e6db74">tx</span> |<span style="color:#e6db74">-&gt;</span> NULL], 
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15</span>    <span style="color:#e6db74">outbox</span> <span style="color:#f92672">=</span> [<span style="color:#e6db74">r</span> <span style="color:#e6db74">\in</span> MessageIds |<span style="color:#e6db74">-&gt;</span> NULL],
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16</span>    <span style="color:#e6db74">outboxStagging</span> <span style="color:#f92672">=</span> [<span style="color:#e6db74">t</span> <span style="color:#e6db74">\in</span> TxIdx |<span style="color:#e6db74">-&gt;</span> NULL],
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17</span>    <span style="color:#e6db74">output</span> <span style="color:#f92672">=</span> { },
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18</span>    <span style="color:#e6db74">processed</span> <span style="color:#f92672">=</span> { }
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19</span>(...)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20</span><span style="color:#e6db74">fair</span> <span style="color:#e6db74">process</span> HandlerThread <span style="color:#e6db74">\in</span> Processes
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21</span><span style="color:#e6db74">variables</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22</span>    <span style="color:#e6db74">txId</span>,
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23</span>    <span style="color:#e6db74">msg</span>,
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24</span>    <span style="color:#e6db74">state</span>, 
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25</span>    <span style="color:#e6db74">nextState</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26</span><span style="color:#e6db74">begin</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27</span>MainLoop<span style="color:#e6db74">:</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28</span>    <span style="color:#e6db74">while</span> TRUE <span style="color:#e6db74">do</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29</span>    LockInMsg<span style="color:#e6db74">:</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30</span>        <span style="color:#e6db74">await</span> <span style="color:#e6db74">~</span> IsEmpty(<span style="color:#e6db74">inputQueue</span>);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31</span>        (...)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32</span>    <span style="color:#e6db74">end</span> <span style="color:#e6db74">while</span>;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33</span><span style="color:#e6db74">end</span> <span style="color:#e6db74">process</span>;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34</span><span style="color:#e6db74">end</span> <span style="color:#e6db74">algorithm</span>; <span style="color:#e6db74">*</span>)</code></pre></div>
+<p>The model describes the state using a set of variables (lines 13-18). Input and output queues are modeled with sets (no ordering) with each message having a unique <code>id</code> and <code>dupId</code> unique for each duplicate. The business data storage (line 14) is a record that holds a sequence of snapshots (all versions of the state including the newest), <code>ver</code> field used to model optimistic concurrency on writes, and <code>tx</code> field needed by the algorithm to commit message processing transactions. Finally, there are two variables modeling the outbox store.</p>
+<p>The system starts with all an empty state except the input queue which contains <code>MessageCount*DupCount</code> messages. There are two handlers (this is controlled by the <code>Processes</code> sequence) that operate in a loop (line 27) processing one message at a time.</p>
+<p>The specification already expresses some non-determinisms as there is no coordination between the handlers. E.g. an execution in which the first handler processes all the messages as well as one in which it processes none of the messages both belong to the model.</p>
+<h4 id="termination">Termination</h4>
+<p>Before checking any other poperties it&rsquo;s good to make sure that the system doesn&rsquo;t get stuck in any of the executions. In our case, proper termination means that there are no more messages in the input queue and both handler are waiting in <code>LockInMsg</code>. This can be expressed in TLA+ with:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-prolog" data-lang="prolog"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1</span>Termination <span style="color:#f92672">==</span> <span style="color:#e6db74">&lt;&gt;</span>(<span style="color:#e6db74">/\</span> <span style="color:#e6db74">\</span>A <span style="color:#e6db74">self</span> <span style="color:#e6db74">\in</span> Processes<span style="color:#e6db74">:</span> <span style="color:#e6db74">pc</span>[<span style="color:#e6db74">self</span>] <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;LockInMsg&#34;</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2</span>                  <span style="color:#e6db74">/\</span> IsEmpty(<span style="color:#e6db74">inputQueue</span>))</code></pre></div>
+<p>The property states that eventually (<code>&lt;&gt;</code> operator) any execution leads to a state in which the <code>inputQueue</code> is empty and all processes are in <code>LockInMsg</code> label.</p>
+<h4 id="message-processing">Message processing</h4>
+<p>Now let&rsquo;s look at message processing logic:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-prolog" data-lang="prolog"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span><span style="color:#e6db74">if</span> <span style="color:#e6db74">outbox</span>[<span style="color:#e6db74">msg</span>.<span style="color:#e6db74">id</span>] <span style="color:#f92672">=</span> NULL <span style="color:#e6db74">then</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span>   <span style="color:#e6db74">txId</span> <span style="color:#e6db74">:=</span> (<span style="color:#e6db74">msg</span>.<span style="color:#e6db74">id</span><span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>)<span style="color:#f92672">*</span>DupCount <span style="color:#f92672">+</span> <span style="color:#e6db74">msg</span>.<span style="color:#e6db74">dupId</span>;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span>   <span style="color:#e6db74">state</span>.<span style="color:#e6db74">tx</span> <span style="color:#e6db74">:=</span> <span style="color:#e6db74">txId</span> ||
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span>   <span style="color:#e6db74">state</span>.<span style="color:#e6db74">history</span> <span style="color:#e6db74">:=</span> <span style="color:#e6db74">&lt;&lt;</span>[<span style="color:#e6db74">msgId</span> |<span style="color:#e6db74">-&gt;</span> <span style="color:#e6db74">msg</span>.<span style="color:#e6db74">id</span>, <span style="color:#e6db74">ver</span> |<span style="color:#e6db74">-&gt;</span> <span style="color:#e6db74">state</span>.<span style="color:#e6db74">ver</span> <span style="color:#f92672">+</span> <span style="color:#ae81ff">1</span>]<span style="color:#e6db74">&gt;&gt;</span> 
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span>                    <span style="color:#e6db74">\o</span> 
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span>                    <span style="color:#e6db74">state</span>.<span style="color:#e6db74">history</span> ||
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span>   <span style="color:#e6db74">state</span>.<span style="color:#e6db74">ver</span> <span style="color:#e6db74">:=</span> <span style="color:#e6db74">state</span>.<span style="color:#e6db74">ver</span> <span style="color:#f92672">+</span> <span style="color:#ae81ff">1</span>;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span>StageOutbox<span style="color:#e6db74">:</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span>   <span style="color:#e6db74">outboxStagging</span>[<span style="color:#e6db74">txId</span>] <span style="color:#e6db74">:=</span> [<span style="color:#e6db74">msgId</span> |<span style="color:#e6db74">-&gt;</span> <span style="color:#e6db74">msg</span>.<span style="color:#e6db74">id</span>, <span style="color:#e6db74">ver</span> |<span style="color:#e6db74">-&gt;</span> <span style="color:#e6db74">state</span>.<span style="color:#e6db74">ver</span>];
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span>StateCommit<span style="color:#e6db74">:</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span>   CommitState(<span style="color:#e6db74">state</span>);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12</span>OutboxCommit<span style="color:#e6db74">:</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13</span>   CommitOutbox(<span style="color:#e6db74">txId</span>);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14</span>StateCleanup<span style="color:#e6db74">:</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15</span>   CleanupState(<span style="color:#e6db74">state</span>);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16</span><span style="color:#e6db74">end</span> <span style="color:#e6db74">if</span>;</code></pre></div>
+<p>First, we check if the <code>outbox</code> contains a record for the current message. If there is not track of the message we generate a unique <code>txId</code> for this concrete execution (line 2) and run the business logic. The business logic execution is modeled by capturing <code>msgId</code> and <code>state.ver</code> in snapshot history. Please note that these operations are modeling in-memory hander state changes - <code>state</code> is a variable defined locally.</p>
+<p>Next, we stage the outbox records, commit the state, and apply the side effects. All this modelled as 4 separate steps using <code>StageOutbox</code>, <code>StateCommit</code>, <code>OutboxCommit</code>, and <code>CleanupState</code> labels. Separate steps model concurrency but more interestingly, together with failures model the lack of atomic writes between outbox and business data stores.</p>
+<h4 id="failures">Failures</h4>
+<p>Failures are the crux of the model and there are many that can happen in the system. We already made sure that the model expresses the atomicity guarantees of the storage engines. Now we need to make sure that write failures are properly represented. This has been done inside dedicated macros - one for each storage operation. Let&rsquo;s look into one of them:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-prolog" data-lang="prolog"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span><span style="color:#e6db74">macro</span> CommitState(<span style="color:#e6db74">state</span>) <span style="color:#e6db74">begin</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span>    <span style="color:#e6db74">if</span> <span style="color:#e6db74">store</span>.<span style="color:#e6db74">ver</span> <span style="color:#f92672">+</span> <span style="color:#ae81ff">1</span> <span style="color:#f92672">=</span> <span style="color:#e6db74">state</span>.<span style="color:#e6db74">ver</span> <span style="color:#e6db74">then</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span>        <span style="color:#e6db74">either</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span>            <span style="color:#e6db74">store</span> <span style="color:#e6db74">:=</span> <span style="color:#e6db74">state</span>;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span>        <span style="color:#e6db74">or</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span>            Fail();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span>        <span style="color:#e6db74">end</span> <span style="color:#e6db74">either</span>;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span>    <span style="color:#e6db74">else</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span>        Fail();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span>    <span style="color:#e6db74">end</span> <span style="color:#e6db74">if</span>;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span><span style="color:#e6db74">end</span> <span style="color:#e6db74">macro</span>;</code></pre></div>
+<p>As we can see we start with modeling the concurrency control check on the business store. What is more interesting though, we use <code>either-or</code> construct to specify that a write operation can either succeed or fail (for whatever reason). This causes a model checker to create a &ldquo;fork&rdquo; in the execution history. One following the happy path and the other representing write failure. The <code>Fail</code> macro brings the handler back to the beginning of the loop - as if an exception has been thrown and caught at the topmost level.</p>
+<p>The other classes of failures are these which happen at the boundary between queues and the handlers. There are quite a few bad things that can happen in there:</p>
+<ul>
+<li>The message lease can expire and the message can be processed concurrently - either by a different thread or different process</li>
+<li>There can be communication failure between the queue and the handler resulting in the message being processed more than once</li>
+<li>There can be duplicates of a logical message generated on the sending end</li>
+<li>Handler can fail before ack&rsquo;ing the message that will cause message reprocessing</li>
+<li>Message processing can fail multiple times resulting in message moving to the poison queue</li>
+</ul>
+<p>Fortunately, from the handler perspective, all the above can be modeled with a single failure mode ie. logical message being received more than once. This has been modeled with the <code>dupId</code> field on the input message that we already talked about.</p>
+<h4 id="checking-safety">Checking safety</h4>
+<p>With all the pieces in place, we are ready to talk about the safety properties we want to check. This is how we defined exactly-once property in <a href="/posts/consistent-messaging/">the consistent messaging post</a>:</p>
+<blockquote>
+<p>(&hellip;) we want an endpoint to produce observable side-effects equivalent to some execution in which each logical message gets processed exactly-once. Equivalent meaning that it’s indistinguishable from the perspective of any other endpoint.</p>
+</blockquote>
+<p>Similarily to termination we can express that as TLA+ property:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-prolog" data-lang="prolog"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span>AtMostOneStateChange <span style="color:#f92672">==</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span> <span style="color:#e6db74">\</span>A <span style="color:#e6db74">id</span> <span style="color:#e6db74">\in</span> MessageIds <span style="color:#e6db74">:</span> 
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span>    Cardinality(WithId(Range(<span style="color:#e6db74">store</span>.<span style="color:#e6db74">history</span>),<span style="color:#e6db74">id</span>)) <span style="color:#e6db74">&lt;=</span> <span style="color:#ae81ff">1</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span>    
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span>AtMostOneOutputMsg <span style="color:#f92672">==</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span> <span style="color:#e6db74">\</span>A <span style="color:#e6db74">id</span> <span style="color:#e6db74">\in</span> MessageIds <span style="color:#e6db74">:</span> 
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span>    Cardinality(WithId(<span style="color:#e6db74">output</span>, <span style="color:#e6db74">id</span>)) <span style="color:#e6db74">&lt;=</span> <span style="color:#ae81ff">1</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span>ConsistentStateAndOutput <span style="color:#f92672">==</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span> LET InState(<span style="color:#e6db74">id</span>)  <span style="color:#f92672">==</span> 
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span>        CHOOSE <span style="color:#e6db74">x</span> <span style="color:#e6db74">\in</span> WithId(Range(<span style="color:#e6db74">store</span>.<span style="color:#e6db74">history</span>), <span style="color:#e6db74">id</span>) <span style="color:#e6db74">:</span> TRUE
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12</span>     InOutput(<span style="color:#e6db74">id</span>) <span style="color:#f92672">==</span> 
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13</span>        CHOOSE <span style="color:#e6db74">x</span> <span style="color:#e6db74">\in</span> WithId(<span style="color:#e6db74">output</span>, <span style="color:#e6db74">id</span>) <span style="color:#e6db74">:</span> TRUE
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14</span> IN <span style="color:#e6db74">\</span>A <span style="color:#e6db74">m</span> <span style="color:#e6db74">\in</span> processed: 
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15</span>     InState(<span style="color:#e6db74">m</span>.<span style="color:#e6db74">id</span>).<span style="color:#e6db74">ver</span> <span style="color:#f92672">=</span> InOutput(<span style="color:#e6db74">m</span>.<span style="color:#e6db74">id</span>).<span style="color:#e6db74">ver</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16</span>    
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17</span>Safety <span style="color:#f92672">==</span> <span style="color:#e6db74">/\</span> AtMostOneStateChange 
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18</span>          <span style="color:#e6db74">/\</span> AtMostOneOutputMsg 
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19</span>          <span style="color:#e6db74">/\</span> ConsistentStateAndOutput</code></pre></div>
+<p>This time the property is a bit more complicated - it consists of three parts that all need to be true (<code>/\</code> is a notation for logical <code>and</code>)</p>
+<ul>
+<li><code>AtMostOneStateChange</code> states that for any message <code>id</code> in the input queue there can be at most one state change committed associated with that messages</li>
+<li><code>AtMostOneOutputMsg</code> states that there can at most one output message for any unique input messages</li>
+<li><code>ConsistentStateAndOutput</code> states that for any fully processed input message (a message that ended-up in the <code>processed</code> set) the output message has been generated based on the business state version that got committed</li>
+</ul>
+<h3 id="summary">Summary</h3>
+<p>We hope that you gained some intuition about model checking and how valuable this technique can be. That said, it&rsquo;s worth stressing some points:</p>
+<ul>
+<li>You need to have in-depth knowledge about the technology to build a useful model. Otherwise, you are very likely to miss some key attributes of the system.</li>
+<li>Model checking doesn&rsquo;t prove anything. First, it&rsquo;s not proof in the mathematical sense, secondly, it&rsquo;s always a simplification, not the system itself.</li>
+<li>Model sizes ie. numbers of states, used in practice are small. In our case, this was 2 handlers and 6 messages in the input queue. That said are is some empirical evidence that even small are good enough to find bugs.</li>
+<li>Model checking is yet another <em>testing</em> technique - arguably quite useful in the context of Distributed Systems</li>
+</ul>
+<p>There are other bits of the specification that we did not discuss here. E.g. what are the non-trivial details needed to make the algorithm safe, how to make the model finite &hellip; and many more.</p>
+<p>If there is any specific part that interests you, don&rsquo;t hesitate and reach out on Twitter!</p>
+<section class="footnotes" role="doc-endnotes">
+<hr>
+<ol>
+<li id="fn:1" role="doc-endnote">
+<p>There&rsquo;s more that comes with the toolkit eg. IDE and TLAPS - a theorem prover developed by Microsoft Research and INRIA Joint Centre <a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:2" role="doc-endnote">
+<p><a href="https://lamport.azurewebsites.net/video/videos.html">TLA+ Video Course</a> and <a href="https://lamport.azurewebsites.net/tla/book.html">Specifying Systems</a> by Leslie Lamport. <a href="https://learntla.com/">Learn TLA+ tutorial</a> and <a href="https://www.hillelwayne.com/post/practical-tla/">Practical TLA+</a> by <a href="https://www.hillelwayne.com/">Hillel Wayne</a>. <a href="http://muratbuffalo.blogspot.com/search/label/tla">Murat Demirbas</a> and <a href="https://brooker.co.za/blog/">Marc Brooker</a> also have some great content on the subject. <a href="#fnref:2" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:3" role="doc-endnote">
+<p>Please note that we are talking about validating production systems rather than distributed algorithms. <a href="#fnref:3" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:4" role="doc-endnote">
+<p>See <a href="https://jepsen.io/consistency/models/linearizable">Linearizability</a>. <a href="#fnref:4" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+</ol>
+</section>
+
+</div>
+
+
+    </main>
+
+    
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-147074711-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+  </body>
+</html>

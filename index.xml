@@ -6,10 +6,20 @@
     <description>Recent content on Exactly Once</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Mon, 06 Jul 2020 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Tue, 14 Jul 2020 00:00:00 +0000</lastBuildDate>
     
 	<atom:link href="https://exactly-once.github.io/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Model checking exactly-once</title>
+      <link>https://exactly-once.github.io/posts/model-checking-exactly-once/</link>
+      <pubDate>Tue, 14 Jul 2020 00:00:00 +0000</pubDate>
+      
+      <guid>https://exactly-once.github.io/posts/model-checking-exactly-once/</guid>
+      <description>Designing distributed algorithms is a challenging task. It&amp;rsquo;s not that hard to reason about &amp;ldquo;happy paths&amp;rdquo; and show that at least sometimes the algorithm does what we intended. Checking that it always behaves as expected is a completely different story.
+By definition, any non-trivial distributed system is concurrent and fails partially. Both elements adding up to the combinatorial explosion of possible executions - too many to fit in a single person&amp;rsquo;s head or analyze by hand.</description>
+    </item>
     
     <item>
       <title>Exactly-once intuition</title>
