@@ -6,15 +6,24 @@
     <description>Recent content in Posts on Exactly Once</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Tue, 14 Jul 2020 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 24 Jul 2020 00:00:00 +0000</lastBuildDate>
     
 	<atom:link href="https://exactly-once.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
+      <title>Improving outbox</title>
+      <link>https://exactly-once.github.io/posts/improving-outbox/</link>
+      <pubDate>Fri, 24 Jul 2020 00:00:00 +0000</pubDate>
+      
+      <guid>https://exactly-once.github.io/posts/improving-outbox/</guid>
+      <description>In one of the previous posts we introduced the Outbox pattern. The Outbox implements the consistent messaging idea by storing the ID of the incoming message and the collection of outgoing messages in the outbox records inside the application database. The correctness of the Outbox behavior depends on the ability to tap into the application state change transaction. The big advantage of this pattern is its relative simplicity, compared to alternative solutions.</description>
+    </item>
+    
+    <item>
       <title>Model checking exactly-once</title>
       <link>https://exactly-once.github.io/posts/model-checking-exactly-once/</link>
-      <pubDate>Tue, 14 Jul 2020 00:00:00 +0000</pubDate>
+      <pubDate>Sat, 18 Jul 2020 00:00:00 +0000</pubDate>
       
       <guid>https://exactly-once.github.io/posts/model-checking-exactly-once/</guid>
       <description>Designing distributed algorithms is a challenging task. It&amp;rsquo;s not that hard to reason about &amp;ldquo;happy paths&amp;rdquo; and show that at least sometimes the algorithm does what we intended. Checking that it always behaves as expected is a completely different story.

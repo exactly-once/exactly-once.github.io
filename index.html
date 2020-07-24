@@ -52,9 +52,20 @@
     <div class="posts">
 <article class="post">
   <h1 class="post-title">
+    <a href="https://exactly-once.github.io/posts/improving-outbox/">Improving outbox</a>
+  </h1>
+  <time datetime="2020-07-24T00:00:00Z" class="post-date">Fri, Jul 24, 2020</time>
+  In one of the previous posts we introduced the Outbox pattern. The Outbox implements the consistent messaging idea by storing the ID of the incoming message and the collection of outgoing messages in the outbox records inside the application database. The correctness of the Outbox behavior depends on the ability to tap into the application state change transaction. The big advantage of this pattern is its relative simplicity, compared to alternative solutions.
+  
+  <div class="read-more-link">
+    <a href="/posts/improving-outbox/">Read More…</a>
+  </div>
+  
+</article><article class="post">
+  <h1 class="post-title">
     <a href="https://exactly-once.github.io/posts/model-checking-exactly-once/">Model checking exactly-once</a>
   </h1>
-  <time datetime="2020-07-14T00:00:00Z" class="post-date">Tue, Jul 14, 2020</time>
+  <time datetime="2020-07-18T00:00:00Z" class="post-date">Sat, Jul 18, 2020</time>
   Designing distributed algorithms is a challenging task. It&rsquo;s not that hard to reason about &ldquo;happy paths&rdquo; and show that at least sometimes the algorithm does what we intended. Checking that it always behaves as expected is a completely different story.
 By definition, any non-trivial distributed system is concurrent and fails partially. Both elements adding up to the combinatorial explosion of possible executions - too many to fit in a single person&rsquo;s head or analyze by hand.
   

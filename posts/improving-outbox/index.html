@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us" lang="en-us">
+<head>
+  <link href="//gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="generator" content="Hugo 0.72.0" />
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Improving outbox &middot; Exactly Once</title>
+
+  
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/print.css" media="print">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/poole.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/syntax.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/hyde.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Abril+Fatface|PT+Sans:400,400i,700">
+
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.png">
+
+  
+  
+</head>
+
+  <body class=" ">
+  <aside class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <a href="https://exactly-once.github.io/"><h1>Exactly Once</h1></a>
+      <p class="lead">
+       On distributed systems by <a href="http://twitter.com/SzymonPobiega">@SzymonPobiega</a> and <a href="http://twitter.com/Masternak">@Masternak</a> 
+      </p>
+    </div>
+
+    <nav>
+      <ul class="sidebar-nav">
+        <li><a href="https://exactly-once.github.io/">Home</a> </li>
+        
+      </ul>
+    </nav>
+
+    <p>&copy; 2020. All rights reserved. </p>
+  </div>
+</aside>
+
+    <main class="content container">
+    <div class="post">
+  <h1>Improving outbox</h1>
+  <span class="post-date">by Tomek Masternak, Szymon Pobiega</span>
+  
+  <p>In <a href="https://exactly-once.github.io/posts/outbox/">one of the previous posts</a> we introduced the Outbox pattern. The Outbox implements the consistent messaging idea by storing the ID of the incoming message and the collection of outgoing messages in the outbox records inside the application database. The correctness of the Outbox behavior depends on the ability to tap into the application state change transaction. The big advantage of this pattern is its relative simplicity, compared to alternative solutions. Worth noticing is also the fact that, at least in the .NET world, there is a high-quality implementation readily available in NServiceBus. In fact NServiceBus has the support for the Outbox pattern since version 5 (which dates back to September 2014) and there are thousands of endpoints running the Outbox algorithm in the wild without any problems. So why should we change anything?</p>
+<p>You may remember that we discussed two main issues in with the Outbox pattern. If not, we&rsquo;ll remind you. The first issue is connected with the tight coupling between the deduplication information (the ID of the incoming message) and the processing outcome information (the outgoing messages). Because of it, is is not possible to implement the Outbox pattern over a storage that does not support multi-entity transactions and robust querying. In practice, this limits the applicability of the Outbox pattern to the relational databases.</p>
+<p>The second issue is the non-deterministic deduplication data eviction. The information about the processed messages is removed based on its age, following the assumption that duplicates are spaced closely on the time axis and that the likelihood of a duplicate arrival goes down super-linearly with the time elapsed from the first delivery. In other words, the most prevalent strategy is to keep the deduplication data for a week and hope that it is enough. Well, we think we can do better.</p>
+<h2 id="decoupling">Decoupling</h2>
+<p>In this post we will attempt to address the first problem. Let&rsquo;s look again at the Outbox pattern</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span>var entity <span style="color:#f92672">=</span> await persister.LoadByCorrelationId(correlationId)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span>                   <span style="color:#f92672">??</span> new Entity { Id <span style="color:#f92672">=</span> correlationId };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span>TransportOperation[] outgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span><span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>entity.OutboxState.ContainsKey(messageId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span>    var state <span style="color:#f92672">=</span> (T)entity.BusinessState <span style="color:#f92672">??</span> new T();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span>    var (newState, pendingTransportOperations) <span style="color:#f92672">=</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span>        await handlerCallback(state, context);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12</span>    outgoingMessages <span style="color:#f92672">=</span> pendingTransportOperations.Operations
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13</span>                                                 .Serialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15</span>    entity.BusinessState <span style="color:#f92672">=</span> newState;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16</span>    entity.OutboxState[messageId] <span style="color:#f92672">=</span> new OutboxState
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17</span>    {
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18</span>        OutgoingMessages <span style="color:#f92672">=</span> outgoingMessages
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19</span>    };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21</span>    await persister.Persist(entity);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23</span><span style="color:#66d9ef">else</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25</span>    outgoingMessages <span style="color:#f92672">=</span> entity.OutboxState[messageId]
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26</span>                             .OutgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29</span><span style="color:#66d9ef">if</span> (outgoingMessages <span style="color:#f92672">!=</span> null)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31</span>    var toDispatch <span style="color:#f92672">=</span> outgoingMessages.Deserialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32</span>    await <span style="color:#a6e22e">Dispatch</span>(context, toDispatch);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34</span>    entity.OutboxState[messageId].OutgoingMessages <span style="color:#f92672">=</span> null;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36</span>    await persister.Persist(entity);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37</span>}</code></pre></div>
+<p>The root cause of the issue can be easily seen in line 34 where we remove the content of the outgoing messages but we leave the ID of the incoming message. Why? Because we need it for the deduplication check done in line 5.</p>
+<p>What can we do to remove the need for keeping all these message IDs around as part of the entity state? Notice the requirement for correct deduplication is that we need to keep the IDs of all processed messages for the entire deduplication period without any interruptions but it does not state where these IDs are stored. As long as they are <strong>in at least one location</strong>, we can move them around at will. So how about this:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1</span>await deduplicationStore.Add(messageId);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2</span>entity.OutboxState.Remove(messageId);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3</span>await persister.Persist(entity);</code></pre></div>
+<p>This code satisfies this requirement as we first add the deduplication information to an external store and then persist the new state of the entity. As a careful reader, at this point you might ask about the consitency models of these two operations. What we really want to achieve is to make sure that the deduplication store write not only happens but also <strong>is visible</strong> to all readers before we clean up the outbox stated. We will come back to this subtle detail later, when we get to implementation technologies. Now we need to take this new store into account in the deduplication check. Previously we only checked the collection inside the entity</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1</span>var entity <span style="color:#f92672">=</span> await persister.LoadByCorrelationId(correlationId)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2</span>                   <span style="color:#f92672">??</span> new Entity { Id <span style="color:#f92672">=</span> correlationId };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4</span>TransportOperation[] outgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5</span><span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>entity.OutboxState.ContainsKey(messageId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7</span>    <span style="color:#f92672">//</span>Execute business logic</code></pre></div>
+<p>Now we also need to take into account the external store</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span>var entity <span style="color:#f92672">=</span> await persister.LoadByCorrelationId(correlationId)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span>                   <span style="color:#f92672">??</span> new Entity { Id <span style="color:#f92672">=</span> correlationId };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span><span style="color:#66d9ef">if</span> (await deduplicationStore.HasBeenProcessed(messageId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span>    <span style="color:#66d9ef">return</span>;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span>TransportOperation[] outgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span><span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>entity.OutboxState.ContainsKey(messageId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span>    <span style="color:#f92672">//</span>Execute business logic</code></pre></div>
+<h2 id="devil-is-in-the-detail">Devil is in the detail</h2>
+<p>There are two subtle things worth noting here. First, we can use an early return in line 6 because we know that outgoing messages are always dispatched prior to creating an entry in the deduplication store. Second, we need to execute the check <strong>after</strong> the entity has been loaded. Why is it so important? Consider a situation when two identical messages arrive. The first copy is processed to the point just before creating the deduplication entry. Then the second copy is picked up and passes the deduplication check based on the external store. Then the first thread continues and removes the deduplication information from the entity. Then the second thread loads the entity and continues processing without any problems. Result? Customer&rsquo;s credit card debited twice.</p>
+<p>With the code like the one above, where the deduplication check happens after the entity is loaded, the optimistic concurrency check will prevent the second thread from successfully committing the application state transition. The message will get back to the queue and when it will be picked up again, the deduplication entry that now exists will prevent duplicate processing.</p>
+<p>Here&rsquo;s the full code with added and changed lines highlighted:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span>var entity <span style="color:#f92672">=</span> await persister.LoadByCorrelationId(correlationId)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span>                   <span style="color:#f92672">??</span> new Entity { Id <span style="color:#f92672">=</span> correlationId };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span>
+<span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span><span style="color:#66d9ef">if</span> (await deduplicationStore.HasBeenProcessed(messageId))
+</span><span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span>{
+</span><span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span>    <span style="color:#66d9ef">return</span>;
+</span><span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span>}
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span>TransportOperation[] outgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span><span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>entity.OutboxState.ContainsKey(messageId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12</span>    var state <span style="color:#f92672">=</span> (T)entity.BusinessState <span style="color:#f92672">??</span> new T();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14</span>    var (newState, pendingTransportOperations) <span style="color:#f92672">=</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15</span>        await handlerCallback(state, context);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17</span>    outgoingMessages <span style="color:#f92672">=</span> pendingTransportOperations.Operations
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18</span>                                                 .Serialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20</span>    entity.BusinessState <span style="color:#f92672">=</span> newState;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21</span>    entity.OutboxState[messageId] <span style="color:#f92672">=</span> new OutboxState
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22</span>    {
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23</span>        OutgoingMessages <span style="color:#f92672">=</span> outgoingMessages
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24</span>    };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26</span>    await persister.Persist(entity);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28</span><span style="color:#66d9ef">else</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30</span>    outgoingMessages <span style="color:#f92672">=</span> entity.OutboxState[messageId]
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31</span>                             .OutgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34</span><span style="color:#66d9ef">if</span> (outgoingMessages <span style="color:#f92672">!=</span> null)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36</span>    var toDispatch <span style="color:#f92672">=</span> outgoingMessages.Deserialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37</span>    await <span style="color:#a6e22e">Dispatch</span>(context, toDispatch);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38</span>
+<span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39</span>    await deduplicationStore.Add(messageId);
+</span><span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40</span>    entity.OutboxState.Remove(messageId);
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42</span>    await persister.Persist(entity);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43</span>}</code></pre></div>
+<h2 id="deduplication-store">Deduplication store</h2>
+<p>You might be now asking a question about what would be a good deduplication store. Well, that, of course, depends on your environment. For a solution deployed on-premises, almost any decent database would be fine. In Azure Cosmos DB and Blob Storage are both good candidates, but with an important caveat. If you decide to use the Cosmos DB, make sure to select <a href="https://docs.microsoft.com/en-us/azure/cosmos-db/consistency-levels">strong consistency</a>. Otherwise, the algorithm would not work as the deduplication checks might be executed against a stale version of the store. If you enjoyed our <a href="https://exactly-once.github.io/posts/model-checking-exactly-once/">previous post on model checking</a>, you might want to read about <a href="https://github.com/Azure/azure-cosmos-tla">TLA+ models of Cosmos DB consistency levels</a>.</p>
+<p>Last but not least, if you are AWS an obvious choice might seem to be S3 but in fact it would lead to an incorrect behavior. The <a href="https://docs.aws.amazon.com/AmazonS3/latest/dev/Introduction.html#ConsistencyModel">S3 consistency model</a> guarantees strong consistency (reads always return the latest state) only for keys which have not been previously read. In other words, if you <code>PUT</code> to a key, a subsequent <code>GET</code> is guaranteed to return the current value. But if you <code>GET</code> a key first, then <code>PUT</code>, and <code>GET</code> again, you can get a stale value &ndash; the one returned by the first <code>GET</code>. Unfortunately this is exactly the flow required by our algorithm. Fortunately Dynamo DB is a good alternative.</p>
+<h2 id="working-code-or-it-didnt-happen">Working code or it didn&rsquo;t happen</h2>
+<p>While the algorithm explained in this post has indeed some considerable advantages over the classic Outbox algorithm, we don&rsquo;t intend to provide a production-ready implementation of it. We believe we can give you an even better solution so treat this one as a stepping stone, a brief stop in our pursuit of high-quality exactly-once processing implementations for contemporary data stores and messaging technologies.</p>
+<p>However, if you wish to take a look at the working code, it can be found <a href="https://github.com/exactly-once/outbox-based-consistent-messaging/blob/master/src/BasicInbox/SagaManager.cs">here</a>. It is part of a solution that contains a number of proof-of-concept implementations of various deduplication approaches. Next time we will show you how the separate deduplication store approach can be optimized for one of the most popular cloud data stores &ndash; Cosmos DB.</p>
+
+</div>
+
+
+    </main>
+
+    
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-147074711-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+  </body>
+</html>
