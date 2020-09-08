@@ -4,16 +4,21 @@
   
   <url>
     <loc>https://exactly-once.github.io/</loc>
-    <lastmod>2020-07-24T00:00:00+00:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://exactly-once.github.io/posts/improving-outbox/</loc>
-    <lastmod>2020-07-24T00:00:00+00:00</lastmod>
+    <lastmod>2020-08-27T00:00:00+00:00</lastmod>
   </url>
   
   <url>
     <loc>https://exactly-once.github.io/posts/</loc>
+    <lastmod>2020-08-27T00:00:00+00:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>https://exactly-once.github.io/posts/token-based-deduplication/</loc>
+    <lastmod>2020-08-27T00:00:00+00:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>https://exactly-once.github.io/posts/improving-outbox/</loc>
     <lastmod>2020-07-24T00:00:00+00:00</lastmod>
   </url>
   

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us" lang="en-us">
+<head>
+  <link href="//gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="generator" content="Hugo 0.72.0" />
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Token-based deduplication &middot; Exactly Once</title>
+
+  
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/print.css" media="print">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/poole.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/syntax.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/hyde.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Abril+Fatface|PT+Sans:400,400i,700">
+
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.png">
+
+  
+  
+</head>
+
+  <body class=" ">
+  <aside class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <a href="https://exactly-once.github.io/"><h1>Exactly Once</h1></a>
+      <p class="lead">
+       On distributed systems by <a href="http://twitter.com/SzymonPobiega">@SzymonPobiega</a> and <a href="http://twitter.com/Masternak">@Masternak</a> 
+      </p>
+    </div>
+
+    <nav>
+      <ul class="sidebar-nav">
+        <li><a href="https://exactly-once.github.io/">Home</a> </li>
+        
+      </ul>
+    </nav>
+
+    <p>&copy; 2020. All rights reserved. </p>
+  </div>
+</aside>
+
+    <main class="content container">
+    <div class="post">
+  <h1>Token-based deduplication</h1>
+  <span class="post-date">by Tomek Masternak, Szymon Pobiega</span>
+  
+  <h1 id="token-based-deduplication">Token-based deduplication</h1>
+<p>One problem left unsolved by our previous attempts at designing a deduplication solution is the non-deterministic nature of data eviction. We know we can&rsquo;t keep the deduplication data forever but when can we safely delete it? Unfortunately there is no good answer. The longer we keep the data, the less likely we are to miss a duplicate message. Fortunately there is a way to solve the problem.</p>
+<h2 id="when-its-gone-its-gone">When it&rsquo;s gone, it&rsquo;s gone</h2>
+<p>So far our algorithms depended on the existence of information to be able to discard a duplicate message. In the absence of such information a message was considered legal. This approach is the root cause of the data eviction problem. So let&rsquo;s try to invert it. In the new algorithm a message can be processed only if deduplication information <em>is present</em>. If it is absent, a message is considered a duplicate. We are going to call that piece of information <em>a token</em>. The token for a given message is removed after the message is processed, preventing other copies of that same message to be processed.</p>
+<h2 id="first-draft">First draft</h2>
+<p>Let&rsquo;s take a look again at the improved outbox algorithm from the previous post. The highlighted lines are the first places that need to be modified.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span>var entity <span style="color:#f92672">=</span> await persister.LoadByCorrelationId(correlationId)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span>                   <span style="color:#f92672">??</span> new Entity { Id <span style="color:#f92672">=</span> correlationId };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span>
+<span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span><span style="color:#66d9ef">if</span> (await deduplicationStore.HasBeenProcessed(messageId))
+</span><span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span>{
+</span><span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span>    <span style="color:#66d9ef">return</span>;
+</span><span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span>}
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span>TransportOperation[] outgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span><span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>entity.OutboxState.ContainsKey(messageId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12</span>    var state <span style="color:#f92672">=</span> (T)entity.BusinessState <span style="color:#f92672">??</span> new T();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14</span>    var (newState, pendingTransportOperations) <span style="color:#f92672">=</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15</span>        await handlerCallback(state, context);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17</span>    outgoingMessages <span style="color:#f92672">=</span> pendingTransportOperations.Operations
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18</span>                                                 .Serialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20</span>    entity.BusinessState <span style="color:#f92672">=</span> newState;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21</span>    entity.OutboxState[messageId] <span style="color:#f92672">=</span> new OutboxState
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22</span>    {
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23</span>        OutgoingMessages <span style="color:#f92672">=</span> outgoingMessages
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24</span>    };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26</span>    await persister.Persist(entity);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28</span><span style="color:#66d9ef">else</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30</span>    outgoingMessages <span style="color:#f92672">=</span> entity.OutboxState[messageId]
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31</span>                             .OutgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34</span><span style="color:#66d9ef">if</span> (outgoingMessages <span style="color:#f92672">!=</span> null)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36</span>    var toDispatch <span style="color:#f92672">=</span> outgoingMessages.Deserialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37</span>    await <span style="color:#a6e22e">Dispatch</span>(context, toDispatch);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38</span>
+<span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39</span>    await deduplicationStore.Add(messageId);
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40</span>    entity.OutboxState.Remove(messageId);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42</span>    await persister.Persist(entity);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43</span>}</code></pre></div>
+<p>The duplicate check in lines 4-7 needs to be inverted so that if the token is not present in a token store, we return without processing the (duplicate) message. Next, we need to ensure we delete the token. That should be done in line 39. Last, but not least, we need to created the tokens for the messages that are sent out. That needs to be done <em>before</em> the messages are dispatched. We end up with the following code.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span>var entity <span style="color:#f92672">=</span> await persister.LoadByCorrelationId(correlationId)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span>                   <span style="color:#f92672">??</span> new Entity { Id <span style="color:#f92672">=</span> correlationId };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span><span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>await tokenStore.ContainsToken(messageId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span>    <span style="color:#66d9ef">return</span>;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span>TransportOperation[] outgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span><span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>entity.OutboxState.ContainsKey(messageId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12</span>    var state <span style="color:#f92672">=</span> (T)entity.BusinessState <span style="color:#f92672">??</span> new T();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14</span>    var (newState, pendingTransportOperations) <span style="color:#f92672">=</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15</span>        await handlerCallback(state, context);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17</span>    outgoingMessages <span style="color:#f92672">=</span> pendingTransportOperations.Operations
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18</span>                                                 .Serialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20</span>    entity.BusinessState <span style="color:#f92672">=</span> newState;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21</span>    entity.OutboxState[messageId] <span style="color:#f92672">=</span> new OutboxState
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22</span>    {
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23</span>        OutgoingMessages <span style="color:#f92672">=</span> outgoingMessages
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24</span>    };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26</span>    await persister.Persist(entity);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28</span><span style="color:#66d9ef">else</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30</span>    outgoingMessages <span style="color:#f92672">=</span> entity.OutboxState[messageId]
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31</span>                             .OutgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34</span><span style="color:#66d9ef">if</span> (outgoingMessages <span style="color:#f92672">!=</span> null)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36</span>    var tokens <span style="color:#f92672">=</span> outgoingMessages.GenerateTokens();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37</span>    await tokenStore.CreateTokens(tokens);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39</span>    var toDispatch <span style="color:#f92672">=</span> outgoingMessages.Deserialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40</span>    await <span style="color:#a6e22e">Dispatch</span>(context, toDispatch);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42</span>    await tokenStore.RemoveToken(messageId);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43</span>    entity.OutboxState.Remove(messageId);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45</span>    await persister.Persist(entity);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46</span>}</code></pre></div>
+<h2 id="make-it-work">Make it work</h2>
+<p>Does it work already? As a first check, imagine two copies of the same message arriving at the same time to a multi-threaded consumer. Both threads start executing the algorithm at roughly the same time so they do the check in line 4 before any of them reaches line 42. Fortunately for us, our old trusted friend optimistic concurrency won&rsquo;t allow one of the threads to reach that far. The optimistic concurrency check at line 26 is going to stop one of the threads and force it back. When it starts processing the duplicate message again the outbox state already indicates the message has been processed. As our friend Andreas says, disaster averted.</p>
+<p>Now let&rsquo;s imagine a different scenario. An upstream endpoint that sends messages to our endpoint struggles and fails processing its message just before line 42. At this point the token has already been created and the message has been sent. Our endpoint starts processing and is quickly done with it. The token has been removed.</p>
+<p>In the meantime the upstream endpoint recovers from the failure and start re-processing the message that failed. Its own token has not been removed yet but the outbox state indicates that the incoming message has been processed so the algorithm skips to line 36. It generates a brand new token and sends a message. This is the same logical message as we already processed but has a brand new token associated with it so our endpoint won&rsquo;t treat it as a duplicate. We are doomed.</p>
+<p>The problem here is that for the algorithm to work we need to ensure that tokens are never re-created once the messages are dispatched. This can be solved by adding an additional check point in the algorithm and using token IDs that are generated unique for each attempt.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1</span>var entity <span style="color:#f92672">=</span> await persister.LoadByCorrelationId(correlationId)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2</span>                   <span style="color:#f92672">??</span> new Entity { Id <span style="color:#f92672">=</span> correlationId };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4</span><span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>await tokenStore.ContainsToken(tokenId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6</span>    <span style="color:#66d9ef">return</span>;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9</span>TransportOperation[] outgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10</span><span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>entity.OutboxState.ContainsKey(messageId))
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12</span>    var state <span style="color:#f92672">=</span> (T)entity.BusinessState <span style="color:#f92672">??</span> new T();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14</span>    var (newState, pendingTransportOperations) <span style="color:#f92672">=</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15</span>        await handlerCallback(state, context);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17</span>    outgoingMessages <span style="color:#f92672">=</span> pendingTransportOperations.Operations
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18</span>                                                 .Serialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20</span>    entity.BusinessState <span style="color:#f92672">=</span> newState;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21</span>    entity.OutboxState[messageId] <span style="color:#f92672">=</span> new OutboxState
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22</span>    {
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23</span>        OutgoingMessages <span style="color:#f92672">=</span> outgoingMessages
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24</span>    };
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26</span>    await persister.Persist(entity);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28</span><span style="color:#66d9ef">else</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29</span>{
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30</span>    outgoingMessages <span style="color:#f92672">=</span> entity.OutboxState[messageId]
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31</span>                             .OutgoingMessages;
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32</span>}
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34</span><span style="color:#66d9ef">if</span> (outgoingMessages <span style="color:#f92672">!=</span> null)
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35</span>{
+<span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36</span>    <span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>outgoingMessages.HaveTokens())
+</span><span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37</span>    {
+</span><span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38</span>        var tokens <span style="color:#f92672">=</span> outgoingMessages.GenerateTokens();
+</span><span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39</span>        await tokenStore.CreateTokens(tokens);
+</span><span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40</span>        await persister.Persist(entity);
+</span><span style="display:block;width:100%;background-color:#3c3d38"><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41</span>    }
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43</span>    var toDispatch <span style="color:#f92672">=</span> outgoingMessages.Deserialize();
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44</span>    await <span style="color:#a6e22e">Dispatch</span>(context, toDispatch);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46</span>    await tokenStore.RemoveToken(tokenId);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47</span>    entity.OutboxState.Remove(messageId);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48</span>
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49</span>    await persister.Persist(entity);
+<span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50</span>}</code></pre></div>
+<p>The lines 36-41 show that new checkpoint. Each execution of these lines generates a brand new set of tokens under new IDs. The first successful execution (that is one that completes line 40) persists the IDs of generated tokens in the outbox state and the messages that are dispatched carry these token IDs.</p>
+<h2 id="discussion">Discussion</h2>
+<p>We managed to successfully modify the improved outbox algorithm to avoid having to rely on non-deterministic deduplication data cleanup. The amount of space the new algorithm uses is stable and proportional to the number of in-flight messages. Good job. Now let&rsquo;s think about the other consequences.</p>
+<p>First, we added an additional checkpoint. That means yet another roundtrip to the business data storage. We need to take that into account when planning the capacity of the infrastructure.</p>
+<p>Next, the token store. It is very similar to the deduplication store we introduced previously but there are some notable differences. In case of the deduplication store we didn&rsquo;t have any code on the hot path that would remove records from it. We silently assumed there is some magic hand that removes the old deduplication records. Some storages indeed support such magic hand e.g. Cosmos DB implements the time-to-live markers on the documents. The token store works differently. Tokens are explicitly removed after a message has been processed. This difference means we have yet another roundtrip to do.</p>
+<p>Last but not least, garbage. Because each token generation attempt creates tokens under brand new set of IDs and only the last (successful) batch of tokens is actually used, we may end up with tokens that are not going to be deleted. In fact there is no good way to tell if a given token belongs to a message that has been stuck somewhere and is going to be processed later or is just a garbage. Fortunately we can use the <em>register-cleanup</em> approach described in <a href="https://exactly-once.github.io/posts/intuition/">one of the previous posts</a> to prevent garbage. Of course this has a price and that price, as you now might expect, is one roundtrip (at this point you may be thinking that roundtrips are universal currency and you can buy anything with it).</p>
+<p>To summarize, the token-based deduplication approach offers a safer way to ensure exactly-once message processing by eliminating the non-deterministic data eviction. The trade-off is three additional roundtrips to data storages for each message processed. Fortunately the modern cloud storages offer a very convenient pricing model where you can actually check how much you pay for the nice cozy feeling of being safe from duplicate messages. And we think the price is actually not that high. In one of the next post we are going to revisit the token-based approach and show how it can be used in other, than messaging, communication approaches.</p>
+
+</div>
+
+
+    </main>
+
+    
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-147074711-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+  </body>
+</html>
