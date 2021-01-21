@@ -6,10 +6,19 @@
     <description>Recent content on Exactly Once</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Thu, 27 Aug 2020 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 21 Jan 2021 00:00:00 +0000</lastBuildDate>
     
 	<atom:link href="https://exactly-once.github.io/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Side effects</title>
+      <link>https://exactly-once.github.io/posts/side-effects/</link>
+      <pubDate>Thu, 21 Jan 2021 00:00:00 +0000</pubDate>
+      
+      <guid>https://exactly-once.github.io/posts/side-effects/</guid>
+      <description>Side effects In the previous post we introduced the token-based deduplication approach. It inverts the traditional principle of deduplication. Instead of dropping a message if another copy of that same message is known to have been processed, the token-based approach drops a message if there is no token for processing it. In other words it uses negative (token does not exist), rather than positive (processing information exists), proof of duplication.</description>
+    </item>
     
     <item>
       <title>Token-based deduplication</title>
