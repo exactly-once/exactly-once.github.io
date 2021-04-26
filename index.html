@@ -52,6 +52,19 @@
     <div class="posts">
 <article class="post">
   <h1 class="post-title">
+    <a href="https://exactly-once.github.io/posts/exactly-once-http/">HTTP protocol for exactly-once processing</a>
+  </h1>
+  <time datetime="2021-04-26T00:00:00Z" class="post-date">Mon, Apr 26, 2021</time>
+  This article proposes an HTTP-based protocol that can be used to ensure remote invocation is conducted exactly once. It is an adaptation of the token-based-deduplication idea described previously.
+One of the most common system integration scenarios is executing a function remotely and fetching the result. It is easy if the target function is pure (does not have any side effects). But what if it does?
+The basic building blocks of the HTTP protocol and REST approach are not enough to guarantee exactly-once execution in such a scenario.
+  
+  <div class="read-more-link">
+    <a href="/posts/exactly-once-http/">Read More…</a>
+  </div>
+  
+</article><article class="post">
+  <h1 class="post-title">
     <a href="https://exactly-once.github.io/posts/side-effects/">Side effects</a>
   </h1>
   <time datetime="2021-01-21T00:00:00Z" class="post-date">Thu, Jan 21, 2021</time>

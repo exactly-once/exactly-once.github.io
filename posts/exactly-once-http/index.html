@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us" lang="en-us">
+<head>
+  <link href="//gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="generator" content="Hugo 0.72.0" />
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>HTTP protocol for exactly-once processing &middot; Exactly Once</title>
+
+  
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/print.css" media="print">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/poole.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/syntax.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/hyde.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Abril+Fatface|PT+Sans:400,400i,700">
+
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.png">
+
+  
+  
+</head>
+
+  <body class=" ">
+  <aside class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <a href="https://exactly-once.github.io/"><h1>Exactly Once</h1></a>
+      <p class="lead">
+       On distributed systems by <a href="http://twitter.com/SzymonPobiega">@SzymonPobiega</a> and <a href="http://twitter.com/Masternak">@Masternak</a> 
+      </p>
+    </div>
+
+    <nav>
+      <ul class="sidebar-nav">
+        <li><a href="https://exactly-once.github.io/">Home</a> </li>
+        
+      </ul>
+    </nav>
+
+    <p>&copy; 2021. All rights reserved. </p>
+  </div>
+</aside>
+
+    <main class="content container">
+    <div class="post">
+  <h1>HTTP protocol for exactly-once processing</h1>
+  <span class="post-date">by Szymon Pobiega</span>
+  
+  <p>This article proposes an HTTP-based protocol that can be used to ensure remote invocation is conducted exactly once. It is an adaptation of the <a href="https://exactly-once.github.io/posts/token-based-deduplication/">token-based-deduplication</a> idea described previously.</p>
+<p>One of the most common system integration scenarios is executing a function remotely and fetching the result. It is easy if the target function is <em>pure</em> (does not have any side effects). But what if it does?</p>
+<p>The basic building blocks of the HTTP protocol and REST approach are not enough to guarantee exactly-once execution in such a scenario. Let&rsquo;s remind ourselves what operations we have at our disposal.</p>
+<h3 id="shameless-plug----workshops">Shameless plug &ndash; workshops</h3>
+<p>On May 12-13 we are running an online workshop on reliable message processing. The details on the workhop can be found <a href="https://ndcworkshops.com/slot/reliable-event-driven-microservices">here</a>. If you like what we publish here, we invite you to join us for the workshop. This time we decided to run it in the Americas time zone so both Europeans and Americans can attend.</p>
+<h3 id="http">HTTP</h3>
+<p>HTTP defines a set of operations (known as <em>verbs</em>) that help to convey the meaning of a given API call. They also have some specific constraints. The most commonly known and used are <code>GET</code>, <code>POST</code>, <code>PUT</code> and <code>DELETE</code>.</p>
+<p><code>GET</code> is expected to not cause any side effects in the target system. Of course, the implementor of a <code>GET</code> call can be evil and update the database but that would be a violation of the protocol. The reason why <code>GET</code> should not have side effects is the fact that the response to this operation type can be cached so the caller can&rsquo;t be sure (unless explicitly opts out from caching) if the response comes from the target server or a cache.</p>
+<p>Next, there are <code>PUT</code> and <code>DELETE</code>. These operations are expected to have idempotent implementations. This means that the caller should be able to retry calling <code>PUT</code> or <code>DELETE</code> several times and the side effects should be exactly as if they called it once. Again, there is nothing that prevents an evil programmer from violating this protocol assumption. Moreover, there is nothing in the protocol or common HTTP libraries that helps the implementor to comply with the idempotence requirements.</p>
+<p>Last but not least, <code>POST</code> carries no idempotency guarantees whatsoever. This is why <code>POST</code> is frequently used when the implementation can&rsquo;t provide any such guarantees or the service provider could not care enough to provide them.</p>
+<h3 id="traditional-solutions-to-http-deduplication">Traditional solutions to HTTP deduplication</h3>
+<p>There are two well-known methods of ensuring the operation requested via a HTTP call is performed exactly once.</p>
+<h4 id="get-before-post">GET-before-POST</h4>
+<p>This approach places the entire burden of deduplication on the caller. The caller is supposed to query the state of the service via <code>GET</code> operations to ensure that a given operation it is about to invoke has not yet been invoked. The downside of this approach is that it might be difficult to obtain the necessary information via regular <code>GET</code> calls. It might be necessary to provide a dedicated <code>GET</code> API just for that purpose. Another issue with this approach is the fact that it requires serializing the calls to a given service in order to guarantee correctness. For these reasons, most people choose a different method.</p>
+<h4 id="operation-id">Operation ID</h4>
+<p>A more popular approach is to add operation ID to each HTTP call that is meant to cause side effects. The operation ID is usually passed as a custom header. The server inspects that header and performs the operation only if it has not been performed yet. Of course to be able to do that it has to maintain the list of all the operations it processed so far. For how long these operation IDs need to be kept? Nobody knows.</p>
+<h3 id="http-exactly-once-protocol">HTTP exactly-once protocol</h3>
+<p>The protocol we propose is heavily influenced by the <a href="https://exactly-once.github.io/posts/token-based-deduplication/">token-based-deduplication</a> idea described previously and by the AMQP 1.0 protocol support for exactly-once messaging.</p>
+<p>It runs in the context of the <a href="https://exactly-once.github.io/posts/side-effects/">side effects handling framework</a> we described recently and assumes that the caller of the HTTP API is a message handler.</p>
+<figure>
+    <img src="/posts/exacly-once-http-overview.png"/> <figcaption>
+            <h4>Overview</h4>
+        </figcaption>
+</figure>
+
+<p>As shown above, the scenario we try to address is an HTTP bridge between two message-driven systems or two parts of a single system. The first question is, how does one invoke the inherently two-stage HTTP API in the context of handling a message? The HTTP interaction consists of preparing and sending the request <em>and</em> receiving and processing the response. Both of these can potentially be associated with a state change of the caller. The problem is that the message deduplication protocols we described so far only allow for <em>one state change transaction per message processed</em>. It looks like calling an HTTP endpoint would require two such changes.</p>
+<p>Our proposal is to use a dedicated <em>follow-up message</em> to implement an HTTP call. The initial message comes in and is processed. One side effect of this processing is sending an HTTP request and the other side effect is sending that <em>follow-up message</em>.</p>
+<p>When the <em>follow-up message</em> is picked up, the HTTP response is retrieved and made the available as the context for processing. The <em>follow-up message</em> carries the context from the first phase (sending request) to the second phase (processing response).</p>
+<figure>
+    <img src="/posts/exacly-once-http-two-stages.png"/> <figcaption>
+            <h4>Two phases</h4>
+        </figcaption>
+</figure>
+
+<p>In reality, it becomes slightly more complex as we need to break down the HTTP interaction into four, not two, phases. From the user code perspective, these phases are not visible and implemented as an infrastructural concern. All the user sees is the preparation of a request and processing of the response. The user does not control the <em>verbs</em> used. All they know is that they call the remote service <em>in a way that is guaranteed to be idempotent</em>.</p>
+<h4 id="phase-1---put">Phase 1 - PUT</h4>
+<figure>
+    <img src="/posts/exacly-once-http-phase-1-put.png"/> 
+</figure>
+
+<p>The first phase is using <code>PUT</code> to transmit the request payload created by the user code to the remote service. This is done immediately in the message handling code in the same way as creating a blob works (described in <a href="https://exactly-once.github.io/posts/side-effects/">the previous post</a>). The cleanup mechanism ensures that requests that are associated with abandoned message processing attempts are removed.</p>
+<h4 id="phase-2---post">Phase 2 - POST</h4>
+<figure>
+    <img src="/posts/exacly-once-http-phase-2-post.png"/> 
+</figure>
+
+<p>The second phase happens during the side effects publication. In this phase the caller issues <code>POST</code> to the same URL as previous <code>PUT</code>. This is the moment when the target service actually does the processing. The response is not returned directly but stored by the target service in a blob.</p>
+<h4 id="phase-3---get">Phase 3 - GET</h4>
+<figure>
+    <img src="/posts/exacly-once-http-phase-3-get.png"/> 
+</figure>
+
+<p>The third phase happens before the <em>follow-up message</em> is passed to the message handler. The infrastructure issues <code>GET</code> to obtain the response generated in the previous phase. That response is added to the message handling context.</p>
+<h4 id="phase-4---delete">Phase 4 - DELETE</h4>
+<figure>
+    <img src="/posts/exacly-once-http-phase-4-delete.png"/> 
+</figure>
+
+<p>The fourth phase of the HTTP interaction happens during the side effects publication stage of processing the <em>follow-up message</em>. A <code>DELETE</code> is issued removes the response information from the service, making sure that the whole interaction leaves no garbage.</p>
+<h3 id="deduplication">Deduplication</h3>
+<p>All good but where is the deduplication? You are right, we have just defined how the HTTP interaction looks like in the context of message processing but have not done anything to deduplicate the calls. Well, actually we did. Let&rsquo;s discuss this by analyzing what can happen in each phase if things go wrong.</p>
+<p>If the caller fails after the <code>PUT</code> phase and the message is retried, another request is generated and transmitted via <code>PUT</code>. At the end of the successful attempt all abandoned requests are removed via <code>DELETE</code>. No problem with duplication here.</p>
+<p>If the caller fails after the <code>POST</code> phase the same <code>POST</code> will be issued again because it has been persisted as a side effect awaiting publication. This means that the server can receive multiple <code>POST</code> calls for a single request transmitted previously by <code>PUT</code>. How can we deal with that? Careful readers can see an analogy to token-based-deduplication here. The request stored as a blob in the target service <strong>is equivalent to a token</strong>. It serves as the deduplication state. The implementation of the service marks the request as processed when it executes the <code>POST</code> so that subsequent <code>POST</code>s are considered duplicates and ignored. In addition to marking the request as processed, the <code>POST</code> also stores the response in a dedicated blob so that it can be retrieved by the caller via <code>GET</code>.</p>
+<p>The next phase can be retried any number of times because it only involves the <code>GET</code> to retrieve the already generated response. Finally, the <code>DELETE</code> that removes all information related to the interaction (both the request and the response stored by the service) can also be retried any number of times as deleting a thing is idempotent by definition.</p>
+<h3 id="implementation">Implementation</h3>
+<p>We have introduced an HTTP-based protocol for executing operations exactly-once.</p>
+<figure>
+    <img src="/posts/exacly-once-http-four-phases.png"/> 
+</figure>
+
+<p>The protocol is meant to be used in interactions between message-driven systems. Here&rsquo;s the code that initiates the HTTP interaction:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c#" data-lang="c#"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">async</span> Task Handle(BillCustomer message, IMessageHandlerContext context)
+{
+    <span style="color:#66d9ef">var</span> total = message.Items.Sum(x =&gt; x.Value);
+    <span style="color:#66d9ef">var</span> requestBody = <span style="color:#66d9ef">new</span> Dictionary&lt;<span style="color:#66d9ef">string</span>, <span style="color:#66d9ef">string</span>&gt;
+    {
+<span style="color:#a6e22e">        [&#34;CustomerId&#34;]</span> = message.CustomerId, 
+<span style="color:#a6e22e">        [&#34;Amount&#34;]</span> = total.ToString(<span style="color:#e6db74">&#34;F&#34;</span>)
+    };
+    <span style="color:#66d9ef">var</span> content = <span style="color:#66d9ef">new</span> FormUrlEncodedContent(requestBody);
+    <span style="color:#66d9ef">await</span> context.InvokeHTTP(<span style="color:#e6db74">&#34;http://localhost:57942/payment/authorize/{uniqueId}&#34;</span>, content,
+        <span style="color:#66d9ef">new</span> ProcessAuthorizeResponse
+        {
+            CustomerId = message.CustomerId,
+            OrderId = message.OrderId
+        });
+}
+</code></pre></div><p>It uses simple form encoding to transfer the request. The <code>InvokeHTTP</code> method requires three parameters. The first the URL template for the HTTP endpoint to call. The <code>uniqueId</code> part is a placeholder for the attempt ID required to distinguish between requests transmitted by different processing attempts. The second parameter is the actual request and the third is <em>follow-up message</em> that will be used as a trigger to process the response. Notice that the target service is actually invoked in the side effects publication phase so there is no race condition between sending that message and generating the HTTP response. The latter is guaranteed to be generated by the time the <em>follow-up message</em> is dispatched.</p>
+<p>Here&rsquo;s an example HTTP endpoint for authorizing payments that is the target of the call:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c#" data-lang="c#"><span style="color:#a6e22e">[HttpPost]</span>
+<span style="color:#a6e22e">[Route(&#34;payment/authorize/{transactionId}&#34;)]</span>
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">async</span> Task&lt;IActionResult&gt; AuthorizePost(<span style="color:#66d9ef">string</span> transactionId)
+{
+    <span style="color:#66d9ef">var</span> result = <span style="color:#66d9ef">await</span> connector.ExecuteTransaction(transactionId,
+        <span style="color:#66d9ef">async</span> payload =&gt;
+        {
+            <span style="color:#66d9ef">var</span> formReader = <span style="color:#66d9ef">new</span> FormReader(payload);
+            <span style="color:#66d9ef">var</span> values = <span style="color:#66d9ef">await</span> formReader.ReadFormAsync().ConfigureAwait(<span style="color:#66d9ef">false</span>);
+            <span style="color:#66d9ef">var</span> formCollection = <span style="color:#66d9ef">new</span> FormCollection(values);
+
+            <span style="color:#66d9ef">var</span> amount = <span style="color:#66d9ef">decimal</span>.Parse(formCollection[<span style="color:#e6db74">&#34;Amount&#34;</span>].Single());
+            <span style="color:#66d9ef">var</span> customerId = formCollection[<span style="color:#e6db74">&#34;CustomerId&#34;</span>].Single();
+
+            <span style="color:#66d9ef">return</span> (<span style="color:#66d9ef">new</span> AuthorizeRequest
+            {
+                CustomerId = customerId,
+                TransactionId = transactionId,
+                Amount = amount
+            }, customerId.Substring(<span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">2</span>));
+        }, 
+        <span style="color:#66d9ef">async</span> session =&gt;
+        {
+            Account account;
+            account = <span style="color:#66d9ef">await</span> session.TransactionContext.Batch()
+                    .ReadItemAsync&lt;Account&gt;(session.Payload.CustomerId);
+
+            account.Balance -= session.Payload.Amount;
+            session.TransactionContext.Batch().UpsertItem(account);
+            <span style="color:#66d9ef">await</span> session.Send(<span style="color:#66d9ef">new</span> SettleTransaction
+            {
+                AccountNumber = account.Number,
+                Amount = session.Payload.Amount,
+                TransactionId = transactionId
+            });
+
+            <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">new</span> StoredResponse(<span style="color:#ae81ff">200</span>, <span style="color:#66d9ef">null</span>);
+        });
+    <span style="color:#66d9ef">if</span> (result.Body != <span style="color:#66d9ef">null</span>)
+    {
+        Response.Body = result.Body;
+    }
+    <span style="color:#66d9ef">return</span> StatusCode(result.Code);
+}
+</code></pre></div><p>As you can see, only the <code>POST</code> handler needs to be implemented by the user. The handling for <code>GET</code>, <code>PUT</code>, and <code>DELETE</code> can be part of the framework. With a helper of <code>connector</code> (also part of the framework) the implementation of <code>POST</code> is broken down into two parts. The first part is responsible for parsing the HTTP request data and returning an object that represents it. The second part implements the business logic. The <code>session</code> parameter gives it access to the database (<code>session.TransactionContext.Batch()</code>), to the request object (<code>session.Payload</code>), and messaging (<code>session.Send</code>). Finally, the business logic is expected to return an instance of <code>StoredResponse</code> which allows it to pass both the HTTP status code and, optionally, a payload.</p>
+<p>Finally, here is the response processing code:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c#" data-lang="c#"><span style="color:#66d9ef">public</span> Task Handle(ProcessAuthorizeResponse message, IMessageHandlerContext context)
+{
+    <span style="color:#66d9ef">var</span> response = context.GetResponse();
+    <span style="color:#66d9ef">if</span> (response.Status == HttpStatusCode.BadRequest) <span style="color:#75715e">//No funds
+</span><span style="color:#75715e"></span>    {
+        log.Info(<span style="color:#e6db74">&#34;Authorization failed&#34;</span>);
+        <span style="color:#66d9ef">return</span> context.Send(<span style="color:#66d9ef">new</span> BillingFailed
+        {
+            CustomerId = message.CustomerId,
+            OrderId = message.OrderId
+        });
+    }
+
+    <span style="color:#66d9ef">return</span> context.Send(<span style="color:#66d9ef">new</span> BillingSucceeded
+    {
+        CustomerId = message.CustomerId,
+        OrderId = message.OrderId
+    });
+}
+</code></pre></div><p>As you can see, the response is available via <code>context.GetResponse()</code>. Based on the response the handler can invoke different branches of the business process.</p>
+<h3 id="summary">Summary</h3>
+<p>We have shown that <a href="https://exactly-once.github.io/posts/token-based-deduplication/">deduplication algorithms that have constant storage requirements are possible</a>. Later we have shown how these algorithms can be <a href="https://exactly-once.github.io/posts/side-effects/">generalized to include not only sending of outgoing messages but any time of side effects</a>, such as storing blobs. In this episode, we proposed an extension to the algorithm that allows integrating exactly-once messaging systems via HTTP. You probably know at what we are hinting at now. It is possible and, we believe, it is necessary, to start thinking about end-to-end exactly-once processing guarantees in distributed system design. Distributed transactions are probably not coming back any time soon, we need to get over it. We also need to acknowledge that <em>just make your business logic idempotent</em> is a terrible piece of advice. Keep calm, embrace exactly-once, and dont&rsquo;t forget about <a href="https://ndcworkshops.com/slot/reliable-event-driven-microservices">the workshop</a>.</p>
+
+</div>
+
+
+    </main>
+
+    
+<script type="application/javascript">
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+	ga('create', 'UA-147074711-1', 'auto');
+	
+	ga('send', 'pageview');
+}
+</script>
+<script async src='https://www.google-analytics.com/analytics.js'></script>
+
+  </body>
+</html>
