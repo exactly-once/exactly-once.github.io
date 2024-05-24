@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us" lang="en-us">
+<head>
+  <link href="https://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta name="generator" content="Hugo 0.126.1">
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Token-driven distributed business processes &middot; Exactly Once</title>
+  <meta name="description" content="" />
+
+  
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/print.css" media="print">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/poole.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/syntax.css">
+  <link type="text/css" rel="stylesheet" href="https://exactly-once.github.io/css/hyde.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Abril+Fatface|PT+Sans:400,400i,700">
+
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.png">
+
+  
+  
+</head>
+
+  <body class=" ">
+  <aside class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <a href="https://exactly-once.github.io/"><h1>Exactly Once</h1></a>
+      <p class="lead">
+        On distributed systems by <a href="http://twitter.com/SzymonPobiega">@SzymonPobiega</a> and <a href="http://twitter.com/Masternak">@Masternak</a>
+      </p>
+    </div>
+
+    <nav>
+      <ul class="sidebar-nav">
+        <li><a href="https://exactly-once.github.io/">Home</a> </li>
+        
+      </ul>
+    </nav>
+
+    <p>&copy; 2024. All rights reserved. </p>
+  </div>
+</aside>
+
+    <main class="content container">
+    <div class="post">
+  <h1>Token-driven distributed business processes</h1>
+  <time datetime=2024-05-23T00:00:00Z class="post-date">Thu, May 23, 2024</time>
+  <p>Long ago (1987) some industry thought leaders like Hector Garcia-Molina realized that transactions are not a suitable way of maintaining consistency of long-running processes. Despite this fact, the reliance on transactions for consistency of writes done across multiple processes over long timeframes continued with technologies such as Microsoft Distributed Transaction Coordinator or XA implementing the 2-phase commit protocol.</p>
+<p>The most sophisticated (ab)use of distributed transaction technology was probably the <a href="https://specs.xmlsoap.org/ws/2004/10/wsat/wsat1104.pdf">WS-AtomicTransaction spec</a> from 2004, which stood out as too enterprisey even compared to the other WS-* specifications.</p>
+<p>The trend seems to have started to change shortly afterward, around 2007 when Pat Helland published his seminal paper &ldquo;Life beyond Distributed Transactions: an Apostate&rsquo;s Opinion&rdquo; where he explained why long-running distributed processes are better implemented as a series of message exchanges between stateful entities.</p>
+<p>Around the same time messaging frameworks such as NServiceBus and MassTransit became well-known. They both took advantage of the distributed transaction mechanism available in Windows (MS DTC) to ensure exactly-once message processing across a distributed system. The idea was simple. Distributed transactions are bad because they limit the autonomy of software components. By limiting the scope of the transaction to just two parties, the messaging node and a database, one can avoid the pitfalls while enjoying the benefits. And the benefits were not trivial because having the guarantee that messages don&rsquo;t get duplicated means the business logic code could focus on the actual business task rather than figuring out if a given message has already been processed.</p>
+<p>Fast-forward 15 years and in today&rsquo;s world distributed systems are the norm. Long-running business processes are split into multiple steps. Each step may be executed by a different computer under the control of a different operating system and implemented in a different programming language. Based on that description one could think that the software industry took Pat Helland&rsquo;s advice seriously and used frameworks such as the ones mentioned before to everyone&rsquo;s benefit. Hardly anything could be farther from the truth. The prevalent communication style today is HTTP-based web services and devs continue to struggle with unreliable applications that lose and/or duplicate information.</p>
+<p>This could be partly explained by the fact that reliable messaging frameworks did not receive support from major software vendors who were preoccupied with extending their market shares by selling snake oil in the form of deduplication built into the infrastructure e.g. Azure ServiceBus or AWS SQS FIFO. In the meantime technology that was the bedrock of the reliability for many of the messaging solutions (like DTC) aged pretty fast. Although a viable replacement in the form of the Outbox pattern has been available for 10 years now, only recently has it started to gain the attention it deserves.</p>
+<blockquote class="twitter-tweet"><p lang="en" dir="ltr">💡Outbox pattern is one of those patterns that I can blindly say: You should use it. Once we learn that, we can understand how messaging system work.<br>I wrote today about how you can use <a href="https://twitter.com/PostgreSQL?ref_src=twsrc%5Etfw">@PostgreSQL</a> Logical Replication to get the push-based implementation.<a href="https://t.co/bURgCYvXOo">https://t.co/bURgCYvXOo</a></p>&mdash; Oskar Dudycz 🇺🇦✊ 🐘 @oskardudycz@hachyderm.io (@oskar_at_net) <a href="https://twitter.com/oskar_at_net/status/1580659257246044160?ref_src=twsrc%5Etfw">October 13, 2022</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+
+<p>As much as we agree with Oskar, we do realize that Outbox is not without weaknesses. Having been able to observe its usage by hundreds of customers over the last 10 years, we&rsquo;ve noticed several downsides e.g.</p>
+<ul>
+<li>Endpoints with high throughput create a lot of deduplication data that needs to be constantly trimmed to avoid consuming all available disk space.</li>
+<li>Most databases are not great at handling tables that accumulate records on one side and lose records on the other side.</li>
+<li>Being able to provide a statistical guarantee rather than a strong one discourages some people (what if a duplicate comes <em>after</em> the deduplication data retention period?)</li>
+<li>Existing outbox implementations are all limited to a single message-driven software system. They can&rsquo;t be easily used across multiple messaging systems that are connected via HTTP channels</li>
+</ul>
+<p>From contemplating all these limitations the idea of token-driven distributed business processes was born. To understand it, you need to zoom out and take a look at the big picture. What you see is usually a bunch of systems, possibly using different technologies, communicating via HTTP. Some of this communication is about requesting data (that&rsquo;s easy!) but some is about triggering a state transition in another system. Now when you zoom back in to where that state transition happens, it often involves changing some data and sending a message. That message in turn gets to some other component and triggers another state transition there. Finally, the message gets to a component that needs to cause a change in a different system. It does so, of course, via ubiquitous HTTP. And the same process continues in that other system.</p>
+<p>We hope you can see a pattern now. Business processes span multiple systems. Within these systems, the signal travels via messaging. Between the systems, the signal travels via HTTP. Messaging and HTTP are just different mediums by which the signal is propagated. We can call the path that the signal takes a <em>conversation</em>. The conversation is a directed graph consisting of activities executed in many different components. In order to ensure the conversation does not corrupt the state as it unfolds, we need to ensure that each activity&rsquo;s side effects are applied <strong>exactly-once</strong>.</p>
+<p>With that introduction, you might have already realized why we called the idea token-driven distributed business processes. When any of these systems we observe interacts with the external world a new signal can be generated. However, before that signal is emitted, a token for processing it is created. Regardless of the medium, the signal uses (a message, an HTTP request, or a <a href="https://datatracker.ietf.org/doc/html/rfc1149">carrier pigeon</a>), claiming the token is required to process the signal. The processing consumes the token and if there is no token, any other copy of that same signal is ignored. This means that when a given signal is duplicated anywhere along the way, only one copy is processed by an activity. All other copies are dropped. When that activity processes a signal, it may emit zero or more new signals that continue the same <em>conversation</em>. Before these signals are emitted, tokens for them are processed in the same way as the initial token was.</p>
+<p>This approach puts the idea of deduplication on its head. Instead of recording that a component <em>did process</em> a signal after the processing is done, we create a token for processing a signal before it is emitted. This ensures that, at any point in time, the space occupied by the deduplication data (in the form of tokens) is proportional to the number of in-flight signals. It also provides deterministic, rather than statistical, exactly-once processing guarantees.</p>
+<p>A careful reader might recognize that this approach we presented violates one of the ideas introduced by Pat Helland in 2007. Because of the need for tokens to be shared between the component that sends a signal and one that receives it, the token storage is a shared resource. Components are no longer <em>fully</em> autonomous. We can argue that in 2022 that is not an issue. One of the often underestimated benefits of cloud computing is the presence of ultra-available cheap key-value stores. These stores can be used for token management and their operational characteristics mean that taking a dependency on them <em>de facto</em> does not limit the autonomy of our components in any way.</p>
+
+</div>
+
+
+    </main>
+
+    
+      
+  
+    
+      
+    
+  
+
+
+    
+  </body>
+</html>

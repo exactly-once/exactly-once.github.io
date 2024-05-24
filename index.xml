@@ -4,161 +4,121 @@
     <title>Exactly Once</title>
     <link>https://exactly-once.github.io/</link>
     <description>Recent content on Exactly Once</description>
-    <generator>Hugo -- gohugo.io</generator>
+    <generator>Hugo</generator>
     <language>en-us</language>
-    <lastBuildDate>Mon, 26 Apr 2021 00:00:00 +0000</lastBuildDate>
-    
-	<atom:link href="https://exactly-once.github.io/index.xml" rel="self" type="application/rss+xml" />
-    
-    
+    <lastBuildDate>Thu, 23 May 2024 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://exactly-once.github.io/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Token-driven distributed business processes</title>
+      <link>https://exactly-once.github.io/posts/token-driven-processes/</link>
+      <pubDate>Thu, 23 May 2024 00:00:00 +0000</pubDate>
+      <guid>https://exactly-once.github.io/posts/token-driven-processes/</guid>
+      <description>Long ago (1987) some industry thought leaders like Hector Garcia-Molina realized that transactions are not a suitable way of maintaining consistency of long-running processes. Despite this fact, the reliance on transactions for consistency of writes done across multiple processes over long timeframes continued with technologies such as Microsoft Distributed Transaction Coordinator or XA implementing the 2-phase commit protocol.&#xA;The most sophisticated (ab)use of distributed transaction technology was probably the WS-AtomicTransaction spec from 2004, which stood out as too enterprisey even compared to the other WS-* specifications.</description>
+    </item>
     <item>
       <title>HTTP protocol for exactly-once processing</title>
       <link>https://exactly-once.github.io/posts/exactly-once-http/</link>
       <pubDate>Mon, 26 Apr 2021 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/exactly-once-http/</guid>
-      <description>This article proposes an HTTP-based protocol that can be used to ensure remote invocation is conducted exactly once. It is an adaptation of the token-based-deduplication idea described previously.
-One of the most common system integration scenarios is executing a function remotely and fetching the result. It is easy if the target function is pure (does not have any side effects). But what if it does?
-The basic building blocks of the HTTP protocol and REST approach are not enough to guarantee exactly-once execution in such a scenario.</description>
+      <description>This article proposes an HTTP-based protocol that can be used to ensure remote invocation is conducted exactly once. It is an adaptation of the token-based-deduplication idea described previously.&#xA;One of the most common system integration scenarios is executing a function remotely and fetching the result. It is easy if the target function is pure (does not have any side effects). But what if it does?&#xA;The basic building blocks of the HTTP protocol and REST approach are not enough to guarantee exactly-once execution in such a scenario.</description>
     </item>
-    
     <item>
       <title>Side effects</title>
       <link>https://exactly-once.github.io/posts/side-effects/</link>
       <pubDate>Thu, 21 Jan 2021 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/side-effects/</guid>
       <description>Side effects In the previous post we introduced the token-based deduplication approach. It inverts the traditional principle of deduplication. Instead of dropping a message if another copy of that same message is known to have been processed, the token-based approach drops a message if there is no token for processing it. In other words it uses negative (token does not exist), rather than positive (processing information exists), proof of duplication.</description>
     </item>
-    
     <item>
       <title>Token-based deduplication</title>
       <link>https://exactly-once.github.io/posts/token-based-deduplication/</link>
       <pubDate>Thu, 27 Aug 2020 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/token-based-deduplication/</guid>
-      <description>Token-based deduplication One problem left unsolved by our previous attempts at designing a deduplication solution is the non-deterministic nature of data eviction. We know we can&amp;rsquo;t keep the deduplication data forever but when can we safely delete it? Unfortunately there is no good answer. The longer we keep the data, the less likely we are to miss a duplicate message. Fortunately there is a way to solve the problem.
-When it&amp;rsquo;s gone, it&amp;rsquo;s gone So far our algorithms depended on the existence of information to be able to discard a duplicate message.</description>
+      <description>One problem left unsolved by our previous attempts at designing a deduplication solution is the non-deterministic nature of data eviction. We know we can&amp;rsquo;t keep the deduplication data forever but when can we safely delete it? Unfortunately there is no good answer. The longer we keep the data, the less likely we are to miss a duplicate message. Fortunately there is a way to solve the problem.&#xA;When it&amp;rsquo;s gone, it&amp;rsquo;s gone So far our algorithms depended on the existence of information to be able to discard a duplicate message.</description>
     </item>
-    
     <item>
       <title>Improving outbox</title>
       <link>https://exactly-once.github.io/posts/improving-outbox/</link>
       <pubDate>Fri, 24 Jul 2020 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/improving-outbox/</guid>
       <description>In one of the previous posts we introduced the Outbox pattern. The Outbox implements the consistent messaging idea by storing the ID of the incoming message and the collection of outgoing messages in the outbox records inside the application database. The correctness of the Outbox behavior depends on the ability to tap into the application state change transaction. The big advantage of this pattern is its relative simplicity, compared to alternative solutions.</description>
     </item>
-    
     <item>
       <title>Model checking exactly-once</title>
       <link>https://exactly-once.github.io/posts/model-checking-exactly-once/</link>
       <pubDate>Sat, 18 Jul 2020 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/model-checking-exactly-once/</guid>
-      <description>Designing distributed algorithms is a challenging task. It&amp;rsquo;s not that hard to reason about &amp;ldquo;happy paths&amp;rdquo; and show that at least sometimes the algorithm does what we intended. Checking that it always behaves as expected is a completely different story.
-By definition, any non-trivial distributed system is concurrent and fails partially. Both elements adding up to the combinatorial explosion of possible executions - too many to fit in a single person&amp;rsquo;s head or analyze by hand.</description>
+      <description>Designing distributed algorithms is a challenging task. It&amp;rsquo;s not that hard to reason about &amp;ldquo;happy paths&amp;rdquo; and show that at least sometimes the algorithm does what we intended. Checking that it always behaves as expected is a completely different story.&#xA;By definition, any non-trivial distributed system is concurrent and fails partially. Both elements adding up to the combinatorial explosion of possible executions - too many to fit in a single person&amp;rsquo;s head or analyze by hand.</description>
     </item>
-    
     <item>
       <title>Exactly-once intuition</title>
       <link>https://exactly-once.github.io/posts/intuition/</link>
       <pubDate>Mon, 06 Jul 2020 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/intuition/</guid>
       <description>Distributed algorithms are difficult. If you find yourself struggling to understand one of them, we assure you &amp;ndash; you are not alone. We have spent last couple of years researching ways to ensure exactly-once message processing in systems that exchange messages in an asynchronous and durable way (a.k.a. message queues) and you know what? We still struggle and make silly mistakes. The reason is that even a very simple distributed algorithm generates vast numbers of possible execution paths.</description>
     </item>
-    
     <item>
       <title>Exactly-once message delivery</title>
       <link>https://exactly-once.github.io/posts/exactly-once-delivery/</link>
       <pubDate>Wed, 20 May 2020 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/exactly-once-delivery/</guid>
       <description>It is widely known that exactly-once message delivery is impossible in a distributed system. But what is exactly-once delivery? To answer this question we need to first ask what do we understand as message delivery. This is not an easy task. In real life the receiving system is not a single blob of code. It consists of multiple layers. Is the message considered delivered when all its bytes are read from the network cable?</description>
     </item>
-    
     <item>
       <title>Outbox</title>
       <link>https://exactly-once.github.io/posts/outbox/</link>
       <pubDate>Fri, 06 Mar 2020 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/outbox/</guid>
-      <description>In the previous post we have shown how consistent messaging can be implemented by storing point-in-time state snapshots and using these snapshots for publishing outgoing messages. We discussed some pros and cons of this approach. This time we will focus on the alternative approach which is based on storing the outgoing messages before they are dispatched.
-Consistent messaging requires the ability to ensure exactly same side effects (in form of the outgoing messages) each time a copy of a given incoming message is processed.</description>
+      <description>In the previous post we have shown how consistent messaging can be implemented by storing point-in-time state snapshots and using these snapshots for publishing outgoing messages. We discussed some pros and cons of this approach. This time we will focus on the alternative approach which is based on storing the outgoing messages before they are dispatched.&#xA;Consistent messaging requires the ability to ensure exactly same side effects (in form of the outgoing messages) each time a copy of a given incoming message is processed.</description>
     </item>
-    
     <item>
       <title>State-based consistent messaging</title>
       <link>https://exactly-once.github.io/posts/state-based-consistent-messaging/</link>
       <pubDate>Mon, 02 Mar 2020 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/state-based-consistent-messaging/</guid>
-      <description>In the previous posts, we described consistent messaging and justified its usefulness in building robust distributed systems. Enough with the theory, it&amp;rsquo;s high time to show some code! First comes the state-based approach.
-Context State-based consistent messaging comes with two requirements:
- &amp;ldquo;Point-in-time&amp;rdquo; state availability - it&amp;rsquo;s possible to restore any past version of the state. Deterministic message handling logic - for a set state and input message every handler execution gives the same result.</description>
+      <description>In the previous posts, we described consistent messaging and justified its usefulness in building robust distributed systems. Enough with the theory, it&amp;rsquo;s high time to show some code! First comes the state-based approach.&#xA;Context State-based consistent messaging comes with two requirements:&#xA;&amp;ldquo;Point-in-time&amp;rdquo; state availability - it&amp;rsquo;s possible to restore any past version of the state. Deterministic message handling logic - for a set state and input message every handler execution gives the same result.</description>
     </item>
-    
     <item>
       <title>Distributed business processes</title>
       <link>https://exactly-once.github.io/posts/distributed-business-processes/</link>
       <pubDate>Tue, 21 Jan 2020 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/distributed-business-processes/</guid>
       <description>In the previous post we explained what a messaging infrastructure is. We showed that it is necessarily a distributed thing with parts running in different processes. We&amp;rsquo;ve seen the trade-offs involved in building the messaging infrastructure and what conditions must be met to guarantee consistent message processing on top of such infrastructure. This time we will explain why it is reasonable to expect that most line-of-business systems require a messaging infrastructure.</description>
     </item>
-    
     <item>
       <title>Messaging infrastructure</title>
       <link>https://exactly-once.github.io/posts/messaging-infrastructure/</link>
       <pubDate>Tue, 19 Nov 2019 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/messaging-infrastructure/</guid>
-      <description>The messaging infrastructure is all the components required to exchange messages between parts of the business logic code.
-There are two parts to the messaging infrastructure. One is the message broker that manages the message queues (and possibly topics). The other equally important part consists of all the libraries running in the same process as the application logic, that expose the API for processing messages.
-Whenever an application wants to send a message, it calls the in-process part of the messaging infrastructure which, in turn, communicates with the out-of-process part.</description>
+      <description>The messaging infrastructure is all the components required to exchange messages between parts of the business logic code.&#xA;There are two parts to the messaging infrastructure. One is the message broker that manages the message queues (and possibly topics). The other equally important part consists of all the libraries running in the same process as the application logic, that expose the API for processing messages.&#xA;Whenever an application wants to send a message, it calls the in-process part of the messaging infrastructure which, in turn, communicates with the out-of-process part.</description>
     </item>
-    
     <item>
       <title>Notes on 2PC</title>
       <link>https://exactly-once.github.io/posts/notes-on-2pc/</link>
       <pubDate>Thu, 24 Oct 2019 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/notes-on-2pc/</guid>
-      <description>If there&amp;rsquo;s a distributed protocol every software engineer knows it&amp;rsquo;s Two-Phase Commit also know as 2PC. Although, in use for several decades1, it&amp;rsquo;s been in steady decline mainly due to lack of support in cloud environments.
-For quite some time it was a de-facto standard for building enterprise distributed systems. That said, with the cloud becoming the default deployment model, designers need to learn how to build reliable systems without it.</description>
+      <description>If there&amp;rsquo;s a distributed protocol every software engineer knows it&amp;rsquo;s Two-Phase Commit also know as 2PC. Although, in use for several decades1, it&amp;rsquo;s been in steady decline mainly due to lack of support in cloud environments.&#xA;For quite some time it was a de-facto standard for building enterprise distributed systems. That said, with the cloud becoming the default deployment model, designers need to learn how to build reliable systems without it.</description>
     </item>
-    
     <item>
       <title>Consistent state</title>
       <link>https://exactly-once.github.io/posts/consistent-state/</link>
       <pubDate>Fri, 11 Oct 2019 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/consistent-state/</guid>
-      <description>In the previous post we talked about exactly-once processing looking at the endpoint from the outside. Here we will re-focus on an individual endpoint and see what exactly-once means for an endpoint&amp;rsquo;s state.
-It&amp;rsquo;s not about the execution history Exactly-once spawned some heated debates in the past1 so let&amp;rsquo;s make sure we make it clear what it means in our context - or more importantly what it doesn&amp;rsquo;t. Here we talk about exactly-once processing not delivery, the two being quite different things.</description>
+      <description>In the previous post we talked about exactly-once processing looking at the endpoint from the outside. Here we will re-focus on an individual endpoint and see what exactly-once means for an endpoint&amp;rsquo;s state.&#xA;It&amp;rsquo;s not about the execution history Exactly-once spawned some heated debates in the past1 so let&amp;rsquo;s make sure we make it clear what it means in our context - or more importantly what it doesn&amp;rsquo;t. Here we talk about exactly-once processing not delivery, the two being quite different things.</description>
     </item>
-    
     <item>
       <title>Sync-async boundary</title>
       <link>https://exactly-once.github.io/posts/sync-async-boundary/</link>
       <pubDate>Thu, 19 Sep 2019 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/sync-async-boundary/</guid>
-      <description>If our experience in the IT industry has taught us anything it would be that drawing boundaries is the most important part of the design process. Boundaries are essential for understanding and communicating the design. The sync-async is an example of a boundary that is useful when designing distributed systems.
-Purely sync The most popular technology for building synchronous systems is HTTP. Such systems often consist of multiple layers of HTTP endpoints.</description>
+      <description>If our experience in the IT industry has taught us anything it would be that drawing boundaries is the most important part of the design process. Boundaries are essential for understanding and communicating the design. The sync-async is an example of a boundary that is useful when designing distributed systems.&#xA;Purely sync The most popular technology for building synchronous systems is HTTP. Such systems often consist of multiple layers of HTTP endpoints.</description>
     </item>
-    
     <item>
       <title>Consistent messaging</title>
       <link>https://exactly-once.github.io/posts/consistent-messaging/</link>
       <pubDate>Wed, 04 Sep 2019 00:00:00 +0000</pubDate>
-      
       <guid>https://exactly-once.github.io/posts/consistent-messaging/</guid>
-      <description>Modern messaging infrastructures offer delivery guarantees that make it non-trivial to build distributed systems. Robust solutions require a good understanding of what can and can&amp;rsquo;t happen and how that affects business level behavior.
-This post looks at the main challenges from the system consistency perspective and sketches possible solutions.
-A system We will assume that systems in focus consist of endpoints, each owning a distinct piece of state. Every endpoint processes input messages, modifying internal state and producing output messages.</description>
+      <description>Modern messaging infrastructures offer delivery guarantees that make it non-trivial to build distributed systems. Robust solutions require a good understanding of what can and can&amp;rsquo;t happen and how that affects business level behavior.&#xA;This post looks at the main challenges from the system consistency perspective and sketches possible solutions.&#xA;A system We will assume that systems in focus consist of endpoints, each owning a distinct piece of state. Every endpoint processes input messages, modifying internal state and producing output messages.</description>
     </item>
-    
   </channel>
 </rss>
